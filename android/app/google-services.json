@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "282440775443",
+    "project_id": "arthico-3f433",
+    "storage_bucket": "arthico-3f433.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:282440775443:android:6554571a2058a5f3028ce6",
+        "android_client_info": {
+          "package_name": "com.example.arthico_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrA70gxz5cpv-Hs65XYXQta22dVg4jIQ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

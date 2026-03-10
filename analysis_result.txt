@@ -1,0 +1,40 @@
+Analyzing arthico_app...                                        
+
+   info - Don't invoke 'print' in production code - lib\main.dart:17:5 - avoid_print
+   info - Unnecessary use of 'toList' in a spread - lib\screens\atur_list_screen.dart:252:30 - unnecessary_to_list_in_spreads
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\atur_list_screen.dart:259:56 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\goals_screen.dart:60:31 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\goals_screen.dart:114:31 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\goals_screen.dart:117:40 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\goals_screen.dart:121:40 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\goals_screen.dart:243:68 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\goals_screen.dart:245:87 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\goals_screen.dart:274:80 - deprecated_member_use
+warning - The value of the field '_auth' isn't used - lib\screens\home_screen.dart:21:21 - unused_field
+   info - Don't use 'BuildContext's across async gaps - lib\screens\home_screen.dart:583:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\home_screen.dart:589:28 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:724:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:760:81 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:760:113 - deprecated_member_use
+warning - The declaration '_datePicker' isn't referenced - lib\screens\laporan_screen.dart:144:10 - unused_element
+   info - Invalid use of a private type in a public API - lib\screens\login_screen.dart:9:3 - library_private_types_in_public_api
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\login_screen.dart:36:41 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:63:31 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:64:38 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:69:38 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:131:31 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:134:38 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile_screen.dart:138:38 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\profile_screen.dart:249:64 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\profile_screen.dart:260:74 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\screens\profile_screen.dart:380:11 - deprecated_member_use
+   info - Invalid use of a private type in a public API - lib\screens\register_screen.dart:8:3 - library_private_types_in_public_api
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\register_screen.dart:36:41 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\register_screen.dart:174:45 - use_build_context_synchronously
+   info - Use interpolation to compose strings and values - lib\services\auth_service.dart:38:38 - prefer_interpolation_to_compose_strings
+   info - Use interpolation to compose strings and values - lib\services\auth_service.dart:59:38 - prefer_interpolation_to_compose_strings
+   info - Use interpolation to compose strings and values - lib\services\auth_service.dart:111:42 - prefer_interpolation_to_compose_strings
+   info - Don't invoke 'print' in production code - lib\services\auth_service.dart:122:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\database_service.dart:52:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\database_service.dart:196:7 - avoid_print
+
