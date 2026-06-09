@@ -14,6 +14,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String name = '';
   String email = '';
+  String phone = '';
+  String otpMethod = 'email';
   String password = '';
   String error = '';
   bool loading = false;
@@ -119,6 +121,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onChanged: (val) => setState(() => email = val),
                     ),
                     const SizedBox(height: 16.0),
+                    // Phone Field
+                    TextFormField(
+                      style: const TextStyle(color: Colors.white),
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        hintText: '081234567890',
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        fillColor: const Color(0xFF0F172A),
+                        filled: true,
+                        prefixIcon: const Icon(Icons.phone_outlined, color: Colors.white38),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF818CF8), width: 2),
+                        ),
+                      ),
+                      validator: (val) => val!.isEmpty ? 'Masukkan nomor telepon' : null,
+                      onChanged: (val) => setState(() => phone = val),
+                    ),
+                    const SizedBox(height: 16.0),
                     // Password Field
                     TextFormField(
                       style: const TextStyle(color: Colors.white),
@@ -179,14 +205,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 loading = true;
                                 error = '';
                               });
-                              Map<String, dynamic> result = await _auth.signUp(email.trim(), password, name);
-                              if (result['user'] == null) {
+                              
+                              try {
+                                final res = await _auth.signUp(email, password, name);
+                                if (res['user'] != null) {
+                                  setState(() { loading = false; });
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('✅ Registrasi berhasil! Tautan verifikasi telah dikirim ke email Anda.'),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  }
+                                } else {
+                                  setState(() {
+                                    error = res['error'] ?? 'Registrasi gagal.';
+                                    loading = false;
+                                  });
+                                }
+                              } catch (e) {
                                 setState(() {
-                                  error = result['error'] ?? 'Pendaftaran gagal.';
+                                  error = e.toString();
                                   loading = false;
                                 });
-                              } else {
-                                if (mounted) Navigator.pop(context);
                               }
                             }
                         },
@@ -214,6 +256,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
+                    const SizedBox(height: 24.0),
+                    Row(
+                      children: const [
+                        Expanded(child: Divider(color: Colors.white24)),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('ATAU', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        ),
+                        Expanded(child: Divider(color: Colors.white24)),
+                      ],
+                    ),
+                    const SizedBox(height: 24.0),
+                    // Google Sign In Button
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(color: Colors.white24),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.g_mobiledata, color: Colors.white, size: 28),
+                      label: const Text(
+                        'Daftar dengan Google',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                      onPressed: () async {
+                        setState(() {
+                          loading = true;
+                          error = '';
+                        });
+                        Map<String, dynamic> result = await _auth.signInWithGoogle();
+                        if (result['user'] == null) {
+                          setState(() {
+                            error = result['error'] ?? 'Gagal mendaftar dengan Google.';
+                            loading = false;
+                          });
+                        } else {
+                          if (mounted) Navigator.pop(context);
+                        }
+                      },
+                    ),
                     const SizedBox(height: 32.0),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,

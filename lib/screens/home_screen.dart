@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../providers/theme_provider.dart';
 
 import '../services/database_service.dart';
 import 'package:intl/intl.dart';
@@ -26,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   
   int _activeScreenIndex = 0;
+  late PageController _pageController;
 
   // Form State
   String _selectedType = 'Pengeluaran';
@@ -37,20 +40,157 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _selectedDate = DateTime.now();
   String _chartFilter = 'Mingguan';
 
-  final List<String> _expenseCategories = ['Makan', 'Transport', 'Belanja', 'Hiburan', 'Lainnya'];
-  final List<String> _incomeCategories = ['Gaji', 'Bonus', 'Investasi', 'Hibah', 'Lainnya'];
+  List<String> _expenseCategories = ['Makan', 'Transport', 'Belanja', 'Hiburan', 'Lainnya'];
+  List<String> _incomeCategories = ['Gaji', 'Bonus', 'Investasi', 'Hibah', 'Lainnya'];
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: 0);
+    _listenToCategories();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _listenToCategories() {
+    _dbService.getCategories().listen((snap) {
+      if (mounted) {
+        final List<String> customCategories = snap.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return (data['name'] ?? '').toString();
+        }).where((name) => name.isNotEmpty).toList();
+
+        setState(() {
+          _expenseCategories.clear();
+          _expenseCategories.addAll(['Makan', 'Transport', 'Belanja', 'Hiburan', 'Lainnya']);
+          for (var cat in customCategories) {
+            if (!_expenseCategories.contains(cat)) {
+              _expenseCategories.add(cat);
+            }
+          }
+
+          _incomeCategories.clear();
+          _incomeCategories.addAll(['Gaji', 'Bonus', 'Investasi', 'Hibah', 'Lainnya']);
+          for (var cat in customCategories) {
+            if (!_incomeCategories.contains(cat)) {
+              _incomeCategories.add(cat);
+            }
+          }
+
+          final currentCategories = _selectedType == 'Pengeluaran' ? _expenseCategories : _incomeCategories;
+          if (!currentCategories.contains(_selectedCategory)) {
+            _selectedCategory = currentCategories.first;
+          }
+        });
+      }
+    });
+  }
+
+  void _showAddCategorySheet() {
+    final formKey = GlobalKey<FormState>();
+    String newName = '';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E293B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Form(
+          key: formKey,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tambah Kategori Baru',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Nama Kategori',
+                    labelStyle: const TextStyle(color: Colors.white60),
+                    fillColor: const Color(0xFF0F172A),
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                  validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
+                  onSaved: (v) => newName = v!.trim(),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)]),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        if (formKey.currentState?.validate() ?? false) {
+                          formKey.currentState?.save();
+                          final res = await _dbService.addCategory(name: newName);
+                          if (res['success']) {
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('✅ Kategori berhasil ditambahkan!'), backgroundColor: Colors.green),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('❌ Gagal: ${res['error']}'), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
+                      child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.bg,
       body: SafeArea(
         child: Column(
           children: [
             _buildNavbar(),
             Expanded(
-              child: SingleChildScrollView(
-                child: _buildActiveScreen(),
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() => _activeScreenIndex = index);
+                },
+                children: [
+                  SingleChildScrollView(child: _buildDashboardContent()),
+                  SingleChildScrollView(child: GoalsScreen()),
+                  SingleChildScrollView(child: LaporanScreen(initialDate: _selectedDate)),
+                  SingleChildScrollView(child: ProfileScreen()),
+                ],
               ),
             ),
           ],
@@ -59,19 +199,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActiveScreen() {
-    switch (_activeScreenIndex) {
-      case 0:
-        return _buildDashboardContent();
-      case 1:
-        return GoalsScreen();
-      case 2:
-        return LaporanScreen(initialDate: _selectedDate);
-      case 3:
-        return ProfileScreen();
-      default:
-        return _buildDashboardContent();
-    }
+  void _goToPage(int index) {
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
   }
 
   Widget _buildDashboardContent() {
@@ -115,12 +248,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNavbar() {
+    final theme = Provider.of<ThemeProvider>(context);
     bool isMobile = MediaQuery.of(context).size.width < 600;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E293B),
-        border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+      decoration: BoxDecoration(
+        color: theme.navBg,
+        border: Border(bottom: BorderSide(color: theme.navBorder, width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -128,12 +262,12 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.account_balance_wallet, color: Color(0xFF818CF8), size: 24),
+              Icon(Icons.account_balance_wallet, color: theme.accent, size: 24),
               if (!isMobile) ...[
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   'Arthico',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: theme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ],
@@ -151,8 +285,26 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+          // Theme toggle button
           GestureDetector(
-            onTap: () => setState(() => _activeScreenIndex = 3),
+            onTap: () => theme.toggleTheme(),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                theme.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                color: theme.isDark ? const Color(0xFFFBBF24) : const Color(0xFF6366F1),
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => _goToPage(3),
             child: CircleAvatar(
               radius: 16,
               backgroundColor: const Color(0xFF10B981),
@@ -166,9 +318,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _navItem(String label, IconData icon, bool isActive, int index) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return GestureDetector(
-      onTap: () => setState(() => _activeScreenIndex = index),
-      child: Container(
+      onTap: () => _goToPage(index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         margin: const EdgeInsets.only(left: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -178,10 +332,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 18),
+            Icon(icon, color: isActive ? Colors.white : theme.textMuted, size: 18),
             if (label.isNotEmpty) ...[
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              Text(label, style: TextStyle(color: isActive ? Colors.white : theme.textMuted, fontWeight: FontWeight.w500)),
             ],
           ],
         ),
@@ -210,30 +364,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _headerGreeting() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         RichText(
           text: TextSpan(
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: theme.textPrimary),
             children: [
               const TextSpan(text: 'Halo, '),
               TextSpan(
                 text: user?.displayName ?? 'User',
-                style: const TextStyle(color: Color(0xFF818CF8)),
+                style: TextStyle(color: theme.accent),
               ),
             ],
           ),
         ),
-        const Text(
+        Text(
           'Pantau kesehatan finansial Anda hari ini.',
-          style: TextStyle(color: Colors.white60, fontSize: 14),
+          style: TextStyle(color: theme.textSecondary, fontSize: 14),
         ),
       ],
     );
   }
 
   Widget _headerDatePicker() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return GestureDetector(
       onTap: () async {
         final DateTime? picked = await showDatePicker(
@@ -244,10 +400,16 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (context, child) {
             return Theme(
               data: Theme.of(context).copyWith(
-                colorScheme: const ColorScheme.dark(
-                  primary: Color(0xFF818CF8),
+                colorScheme: ColorScheme(
+                  brightness: theme.isDark ? Brightness.dark : Brightness.light,
+                  primary: const Color(0xFF818CF8),
                   onPrimary: Colors.white,
-                  surface: Color(0xFF1E293B),
+                  surface: theme.card,
+                  onSurface: theme.textPrimary,
+                  secondary: theme.accent,
+                  onSecondary: Colors.white,
+                  error: Colors.red,
+                  onError: Colors.white,
                 ),
               ),
               child: child!,
@@ -263,19 +425,19 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: theme.card,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.calendar_today, size: 16, color: Colors.white60),
+            Icon(Icons.calendar_today, size: 16, color: theme.textSecondary),
             const SizedBox(width: 8),
             Text(
               DateFormat('MMM yyyy').format(_selectedDate),
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: theme.textPrimary),
             ),
-            const Icon(Icons.arrow_drop_down, color: Colors.white60),
+            Icon(Icons.arrow_drop_down, color: theme.textSecondary),
           ],
         ),
       ),
@@ -330,12 +492,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _summaryCard(String title, String amount, String subtitle, IconData icon, Color iconColor) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     bool isMobile = MediaQuery.of(context).size.width < 600;
     return Container(
       width: isMobile ? MediaQuery.of(context).size.width * 0.7 : 240,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: theme.card,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -345,13 +508,13 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(icon, color: iconColor, size: 18),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(title, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
             ],
           ),
           const SizedBox(height: 12),
-          Text(amount, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(amount, style: TextStyle(color: theme.textPrimary, fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+          Text(subtitle, style: TextStyle(color: theme.textMuted, fontSize: 12)),
         ],
       ),
     );
@@ -406,6 +569,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _analysisCard(double totalIncome, double totalExpense) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     bool isMobile = MediaQuery.of(context).size.width < 600;
     
     return StreamBuilder<QuerySnapshot>(
@@ -420,25 +584,23 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
 
-        // Sisa aman = Pemasukan - Pengeluaran - Beban Pokok yang belum dibayar
-        // Namun biasanya sisa aman dihitung dari (Pemasukan - Pengeluaran) - Beban Pokok
         double sisaBolehJajan = (totalIncome - totalExpense) - totalBeban;
 
         return Container(
           width: isMobile ? MediaQuery.of(context).size.width * 0.7 : 240,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: theme.card,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: const [
-                  Icon(Icons.security, color: Colors.blueAccent, size: 16),
-                  SizedBox(width: 8),
-                  Text('Analisis Sisa Aman', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                children: [
+                  const Icon(Icons.security, color: Colors.blueAccent, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Analisis Sisa Aman', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                 ],
               ),
               const SizedBox(height: 12),
@@ -478,21 +640,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _rowText(String label, String value, Color valueColor) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        Text(label, style: TextStyle(color: theme.textMuted, fontSize: 10)),
         Text(value, style: TextStyle(color: valueColor, fontSize: 10, fontWeight: FontWeight.bold)),
       ],
     );
   }
 
   Widget _buildTransactionForm() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     bool isSmallScreen = MediaQuery.of(context).size.width < 800;
     return Container(
       padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: theme.card,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -511,20 +675,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Catat Transaksi Baru', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text('Input harianmu.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                    children: [
+                      Text('Catat Transaksi Baru', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('Input harianmu.', style: TextStyle(color: theme.textMuted, fontSize: 12)),
                     ],
                   ),
                 ],
               ),
               OutlinedButton(
-                onPressed: () {},
+                onPressed: _showAddCategorySheet,
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white24),
+                  side: BorderSide(color: theme.border),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('+ Kategori', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                child: Text('+ Kategori', style: TextStyle(color: theme.textSecondary, fontSize: 11)),
               ),
             ],
           ),
@@ -579,15 +743,15 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           const SizedBox(height: 16),
-          const Text('Keterangan', style: TextStyle(color: Colors.white60, fontSize: 14)),
+          Text('Keterangan', style: TextStyle(color: theme.textSecondary, fontSize: 14)),
           const SizedBox(height: 8),
           TextField(
             controller: _noteController,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: theme.textPrimary),
             decoration: InputDecoration(
               hintText: 'Contoh: Beli sarapan',
-              hintStyle: const TextStyle(color: Colors.white24),
-              fillColor: const Color(0xFF0F172A),
+              hintStyle: TextStyle(color: theme.textMuted),
+              fillColor: theme.inputBg,
               filled: true,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
@@ -635,24 +799,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _formDropdown(String label, String value, double width, List<String> items, Function(String?) onChanged) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return SizedBox(
       width: width,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 14)),
+          Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 14)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: theme.inputBg,
               borderRadius: BorderRadius.circular(12),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: value,
-                dropdownColor: const Color(0xFF1E293B),
-                style: const TextStyle(color: Colors.white),
+                dropdownColor: theme.card,
+                style: TextStyle(color: theme.textPrimary),
                 isExpanded: true,
                 items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: onChanged,
@@ -665,6 +830,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _formInputWidget(String label, TextEditingController controller, double width, TextInputType type) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return SizedBox(
       width: width,
       child: Column(
@@ -675,7 +841,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             children: [
-              Text(label, style: const TextStyle(color: Colors.white60, fontSize: 14)),
+              Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 14)),
               const SizedBox(width: 8),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -687,8 +853,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     margin: const EdgeInsets.only(left: 4),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(4)),
-                    child: Text(e, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                    decoration: BoxDecoration(color: theme.border, borderRadius: BorderRadius.circular(4)),
+                    child: Text(e, style: TextStyle(color: theme.textMuted, fontSize: 10)),
                   ),
                 )).toList(),
               ),
@@ -698,11 +864,11 @@ class _HomeScreenState extends State<HomeScreen> {
           TextField(
             controller: controller,
             keyboardType: type,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: theme.textPrimary),
             decoration: InputDecoration(
               hintText: '0',
-              hintStyle: const TextStyle(color: Colors.white24),
-              fillColor: const Color(0xFF0F172A),
+              hintStyle: TextStyle(color: theme.textMuted),
+              fillColor: theme.inputBg,
               filled: true,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

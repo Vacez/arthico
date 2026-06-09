@@ -190,6 +190,46 @@ class _LoginScreenState extends State<LoginScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
+                    const SizedBox(height: 24.0),
+                    Row(
+                      children: const [
+                        Expanded(child: Divider(color: Colors.white24)),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('ATAU', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        ),
+                        Expanded(child: Divider(color: Colors.white24)),
+                      ],
+                    ),
+                    const SizedBox(height: 24.0),
+                    // Google Sign In Button
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(color: Colors.white24),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.g_mobiledata, color: Colors.white, size: 28),
+                      label: const Text(
+                        'Lanjutkan dengan Google',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                      onPressed: () async {
+                        setState(() {
+                          loading = true;
+                          error = '';
+                        });
+                        Map<String, dynamic> result = await _auth.signInWithGoogle();
+                        if (result['user'] == null) {
+                          setState(() {
+                            error = result['error'] ?? 'Gagal login.';
+                            loading = false;
+                          });
+                        }
+                      },
+                    ),
                     const SizedBox(height: 32.0),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,

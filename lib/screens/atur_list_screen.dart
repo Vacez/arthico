@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../services/database_service.dart';
+import '../providers/theme_provider.dart';
 import 'package:intl/intl.dart';
 
 class AturListScreen extends StatefulWidget {
@@ -56,15 +58,21 @@ class _AturListScreenState extends State<AturListScreen> {
   @override
   Widget build(BuildContext context) {
     bool isMobile = MediaQuery.of(context).size.width < 800;
+    final theme = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Atur List Kebutuhan', style: TextStyle(color: Colors.white, fontSize: 18)),
+        backgroundColor: theme.navBg,
+        elevation: 0,
+        title: Text('Atur List Kebutuhan', style: TextStyle(color: theme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: theme.textPrimary),
           onPressed: () => Navigator.pop(context),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: theme.navBorder, height: 1),
         ),
       ),
       body: SingleChildScrollView(
@@ -75,54 +83,64 @@ class _AturListScreenState extends State<AturListScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: theme.card,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: theme.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(_editingId == null ? 'Tambah Kebutuhan' : 'Edit Kebutuhan', 
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
                   TextField(
                     controller: _titleController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: theme.textPrimary),
+                    decoration: InputDecoration(
                       labelText: 'Nama Kebutuhan',
-                      labelStyle: TextStyle(color: Colors.white60),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                      labelStyle: TextStyle(color: theme.textSecondary),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _amountController,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: theme.textPrimary),
+                    decoration: InputDecoration(
                       labelText: 'Estimasi Biaya (Rp)',
-                      labelStyle: TextStyle(color: Colors.white60),
-                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                      labelStyle: TextStyle(color: theme.textSecondary),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
                     ),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)]),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      onPressed: _saveExpense,
-                      child: Text(_editingId == null ? 'Simpan Kebutuhan' : 'Simpan Perubahan', 
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _saveExpense,
+                        child: Text(_editingId == null ? 'Simpan Kebutuhan' : 'Simpan Perubahan', 
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      ),
                     ),
                   ),
                   if (_editingId != null)
                     Center(
                       child: TextButton(
                         onPressed: _resetForm,
-                        child: const Text('Batal Edit', style: TextStyle(color: Colors.white38)),
+                        child: Text('Batal Edit', style: TextStyle(color: theme.textMuted)),
                       ),
                     ),
                 ],
@@ -135,23 +153,24 @@ class _AturListScreenState extends State<AturListScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: theme.card,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: theme.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Daftar Kewajiban', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('Daftar Kewajiban', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
                   
                   // Table Header
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
                       children: [
-                        Expanded(flex: 3, child: Text('DESKRIPSI', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
-                        Expanded(flex: 2, child: Text('NOMINAL', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
-                        Expanded(flex: 2, child: Text('AKSI', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 3, child: Text('DESKRIPSI', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 2, child: Text('NOMINAL', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 2, child: Text('AKSI', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
                       ],
                     ),
                   ),
@@ -180,8 +199,8 @@ class _AturListScreenState extends State<AturListScreen> {
 
                             return Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: const BoxDecoration(
-                                border: Border(bottom: BorderSide(color: Colors.white10)),
+                              decoration: BoxDecoration(
+                                border: Border(bottom: BorderSide(color: theme.border)),
                               ),
                               child: Row(
                                 children: [
@@ -191,7 +210,7 @@ class _AturListScreenState extends State<AturListScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                        Text(title, style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [
@@ -215,7 +234,7 @@ class _AturListScreenState extends State<AturListScreen> {
                                   Expanded(
                                     flex: 2,
                                     child: Text(currencyFormatter.format(amount), 
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                      style: TextStyle(color: theme.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
                                   ),
                                   // Aksi
                                   Expanded(
@@ -278,7 +297,7 @@ class _AturListScreenState extends State<AturListScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Expanded(child: Text('TOTAL BEBAN (PENDING)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                                Expanded(child: Text('TOTAL BEBAN (PENDING)', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12))),
                                 Text(currencyFormatter.format(totalBeban), 
                                   style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 14)),
                               ],

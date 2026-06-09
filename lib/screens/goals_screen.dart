@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../services/database_service.dart';
+import '../providers/theme_provider.dart';
 import 'package:intl/intl.dart';
 
 class GoalsScreen extends StatefulWidget {
@@ -15,42 +17,50 @@ class _GoalsScreenState extends State<GoalsScreen> {
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
   void _showAddGoalDialog() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     final titleController = TextEditingController();
     final amountController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Tambah Goal Baru', style: TextStyle(color: Colors.white)),
+        backgroundColor: theme.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Tambah Goal Baru', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: titleController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: TextStyle(color: theme.textPrimary),
+              decoration: InputDecoration(
                 labelText: 'Nama Goal',
-                labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                labelStyle: TextStyle(color: theme.textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
               ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: amountController,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: TextStyle(color: theme.textPrimary),
+              decoration: InputDecoration(
                 labelText: 'Target Nominal (Rp)',
-                labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                labelStyle: TextStyle(color: theme.textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: Colors.white60))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Batal', style: TextStyle(color: theme.textSecondary))),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.accent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               if (titleController.text.isNotEmpty && amountController.text.isNotEmpty) {
                 await _dbService.addGoal(
@@ -60,7 +70,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                 Navigator.pop(context);
               }
             },
-            child: const Text('Simpan'),
+            child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -68,36 +78,39 @@ class _GoalsScreenState extends State<GoalsScreen> {
   }
 
   void _showNabungDialog(String goalId, String goalTitle) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     final amountController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: Text('Nabung: $goalTitle', style: const TextStyle(color: Colors.white, fontSize: 16)),
+        backgroundColor: theme.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Nabung: $goalTitle', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Masukkan nominal yang ingin ditabung dari saldo Anda.', style: TextStyle(color: Colors.white60, fontSize: 12)),
+            Text('Masukkan nominal yang ingin ditabung dari saldo Anda.', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
             const SizedBox(height: 16),
             TextField(
               controller: amountController,
               keyboardType: TextInputType.number,
               autofocus: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: TextStyle(color: theme.textPrimary),
+              decoration: InputDecoration(
                 labelText: 'Nominal (Rp)',
-                labelStyle: TextStyle(color: Colors.white60),
+                labelStyle: TextStyle(color: theme.textSecondary),
                 prefixText: 'Rp ',
-                prefixStyle: TextStyle(color: Colors.white),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                prefixStyle: TextStyle(color: theme.textPrimary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal', style: TextStyle(color: Colors.white60))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Batal', style: TextStyle(color: theme.textSecondary))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
             onPressed: () async {
@@ -124,7 +137,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                 }
               }
             },
-            child: const Text('Nabung Sekarang'),
+            child: const Text('Nabung Sekarang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -134,6 +147,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
   @override
   Widget build(BuildContext context) {
     bool isMobile = MediaQuery.of(context).size.width < 600;
+    final theme = Provider.of<ThemeProvider>(context);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,8 +157,9 @@ class _GoalsScreenState extends State<GoalsScreen> {
           margin: EdgeInsets.all(isMobile ? 12 : 24),
           padding: EdgeInsets.all(isMobile ? 16 : 32),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: theme.card,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.border),
           ),
           child: Column(
             children: [
@@ -157,11 +172,11 @@ class _GoalsScreenState extends State<GoalsScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.track_changes, color: Colors.white70),
+                      Icon(Icons.track_changes, color: theme.textSecondary),
                       const SizedBox(width: 12),
-                      const Text(
+                      Text(
                         'Goals / Tabungan',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: theme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -190,11 +205,11 @@ class _GoalsScreenState extends State<GoalsScreen> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Text(
                         'Belum ada goals. Klik "Tambah Goal" untuk mulai menabung 💰',
-                        style: TextStyle(color: Colors.white38, fontSize: 14),
+                        style: TextStyle(color: theme.textMuted, fontSize: 14),
                       ),
                     );
                   }
@@ -214,9 +229,9 @@ class _GoalsScreenState extends State<GoalsScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: theme.isDark ? const Color(0xFF0F172A) : theme.bg,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white10),
+                          border: Border.all(color: theme.border),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,11 +243,11 @@ class _GoalsScreenState extends State<GoalsScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                      Text(title, style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                                       const SizedBox(height: 4),
                                       Text(
                                         'Terisi: ${currencyFormatter.format(current)} dari ${currencyFormatter.format(target)}',
-                                        style: const TextStyle(color: Colors.white38, fontSize: 12),
+                                        style: TextStyle(color: theme.textSecondary, fontSize: 12),
                                       ),
                                     ],
                                   ),
@@ -259,7 +274,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                                   height: 10,
                                   width: double.infinity,
                                   decoration: BoxDecoration(
-                                    color: Colors.white10,
+                                    color: theme.isDark ? Colors.white10 : Colors.black12,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
@@ -281,7 +296,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('${(progress * 100).toStringAsFixed(1)}% Tercapai', style: const TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w500)),
+                                Text('${(progress * 100).toStringAsFixed(1)}% Tercapai', style: TextStyle(color: theme.textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
                                 if (progress >= 1.0)
                                   const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 16),
                               ],

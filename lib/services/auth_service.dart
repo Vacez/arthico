@@ -1,8 +1,53 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  // Sign In with Google
+  Future<Map<String, dynamic>> signInWithGoogle() async {
+    try {
+      // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        return {'user': null, 'error': 'Dibatalkan oleh pengguna'};
+      }
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // Create a new credential
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Once signed in, return the UserCredential
+      UserCredential userCredential = await _auth.signInWithCredential(credential);
+      User? user = userCredential.user;
+
+      if (user != null) {
+        // check if user document exists in firestore, if not create
+        var doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (!doc.exists) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'uid': user.uid,
+            'name': user.displayName ?? '',
+            'email': user.email ?? '',
+            'createdAt': FieldValue.serverTimestamp(),
+            'balance': 0,
+          });
+        }
+      }
+
+      return {'user': user, 'error': null};
+    } catch (e) {
+      return {'user': null, 'error': e.toString()};
+    }
+  }
 
   // Sign up with email & password
   Future<Map<String, dynamic>> signUp(String email, String password, String name) async {
@@ -13,7 +58,10 @@ class AuthService {
       
       // Update display name
       await user?.updateDisplayName(name);
-      
+
+      // Send verification email link
+      await user?.sendEmailVerification();
+
       // CREATE DOCUMENT IN FIRESTORE "users"
       await FirebaseFirestore.instance.collection('users').doc(user?.uid).set({
         'uid': user?.uid,
@@ -36,6 +84,33 @@ class AuthService {
         message = 'Konfigurasi belum diaktifkan di Console';
       }
       return {'user': null, 'error': message + ' (${e.code})'};
+    } catch (e) {
+      return {'user': null, 'error': e.toString()};
+    }
+  }
+
+  // Sign up with Phone Auth (links email and password)
+  Future<Map<String, dynamic>> signUpWithPhone(PhoneAuthCredential credential, String email, String password, String name) async {
+    try {
+      UserCredential result = await _auth.signInWithCredential(credential);
+      User? user = result.user;
+      
+      if (user != null) {
+        // Link email and password
+        AuthCredential emailCred = EmailAuthProvider.credential(email: email, password: password);
+        await user.linkWithCredential(emailCred);
+        
+        await user.updateDisplayName(name);
+
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'name': name,
+          'email': email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'balance': 0,
+        });
+      }
+      return {'user': user, 'error': null};
     } catch (e) {
       return {'user': null, 'error': e.toString()};
     }

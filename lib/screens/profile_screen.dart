@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../providers/theme_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -37,26 +39,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showEditProfileDialog() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Edit Profil', style: TextStyle(color: Colors.white)),
+        backgroundColor: theme.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Edit Profil', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: _nameController,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
+          style: TextStyle(color: theme.textPrimary),
+          decoration: InputDecoration(
             labelText: 'Nama Lengkap',
-            labelStyle: TextStyle(color: Colors.white60),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+            labelStyle: TextStyle(color: theme.textSecondary),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal', style: TextStyle(color: Colors.white60)),
+            child: Text('Batal', style: TextStyle(color: theme.textSecondary)),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.accent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               final res = await _auth.updateProfile(_nameController.text);
               if (res['success']) {
@@ -71,7 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               }
             },
-            child: const Text('Simpan'),
+            child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -79,33 +88,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showChangePasswordDialog() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Ubah Password', style: TextStyle(color: Colors.white)),
+        backgroundColor: theme.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Ubah Password', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _currentPasswordController,
               obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: TextStyle(color: theme.textPrimary),
+              decoration: InputDecoration(
                 labelText: 'Password Saat Ini',
-                labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                labelStyle: TextStyle(color: theme.textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
               ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _newPasswordController,
               obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: TextStyle(color: theme.textPrimary),
+              decoration: InputDecoration(
                 labelText: 'Password Baru',
-                labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                labelStyle: TextStyle(color: theme.textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
               ),
             ),
           ],
@@ -113,9 +126,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal', style: TextStyle(color: Colors.white60)),
+            child: Text('Batal', style: TextStyle(color: theme.textSecondary)),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.accent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () async {
               if (_currentPasswordController.text.isEmpty || _newPasswordController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -140,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               }
             },
-            child: const Text('Ubah'),
+            child: const Text('Ubah', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -149,6 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
     return StreamBuilder<DocumentSnapshot>(
       stream: _dbService.getUserData(),
       builder: (context, userSnapshot) {
@@ -206,12 +224,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildUserProfileCard(double balance, String displayName, bool isMobile) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Container(
       width: isMobile ? double.infinity : 300,
       padding: EdgeInsets.all(isMobile ? 24 : 32),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: theme.card,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.border),
       ),
       child: Column(
         children: [
@@ -226,10 +246,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: CircleAvatar(
                   radius: 50,
-                  backgroundColor: const Color(0xFF1E293B),
+                  backgroundColor: theme.card,
                   child: Text(
                     displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : 'A',
-                    style: const TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 40, color: theme.textPrimary, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -241,8 +261,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          Text(displayName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(user?.email ?? 'email@gmail.com', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+          Text(displayName, style: TextStyle(color: theme.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(user?.email ?? 'email@gmail.com', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -250,12 +270,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('MEMBER ID #5', style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(height: 32),
-          const Text('Total Saldo', style: TextStyle(color: Colors.white38, fontSize: 12)),
-          Text(currencyFormatter.format(balance), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+          Text('Total Saldo', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+          Text(currencyFormatter.format(balance), style: TextStyle(color: theme.textPrimary, fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 48),
           _profileButton(Icons.person, 'Edit Profil', const Color(0xFF6366F1), onTap: _showEditProfileDialog),
           const SizedBox(height: 12),
-          _profileButton(Icons.vpn_key, 'Ubah Password', const Color(0xFF334155), onTap: _showChangePasswordDialog),
+          _profileButton(Icons.vpn_key, 'Ubah Password', theme.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), textAndIconColor: theme.textPrimary, onTap: _showChangePasswordDialog),
           const SizedBox(height: 12),
           _profileButton(Icons.logout, 'Logout', const Color(0xFFEF4444).withOpacity(0.2), isLogout: true, onTap: () => _auth.signOut()),
         ],
@@ -263,7 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _profileButton(IconData icon, String label, Color color, {bool isLogout = false, required VoidCallback onTap}) {
+  Widget _profileButton(IconData icon, String label, Color color, {bool isLogout = false, Color? textAndIconColor, required VoidCallback onTap}) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -271,14 +291,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: color,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
         ),
         onPressed: onTap,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: isLogout ? Colors.redAccent : Colors.white),
+            Icon(icon, size: 18, color: isLogout ? Colors.redAccent : (textAndIconColor ?? Colors.white)),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(color: isLogout ? Colors.redAccent : Colors.white, fontWeight: FontWeight.bold)),
+            Text(label, style: TextStyle(color: isLogout ? Colors.redAccent : (textAndIconColor ?? Colors.white), fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -286,19 +307,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildRiwayatTransaksi() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.history, color: Colors.white70),
-              SizedBox(width: 12),
-              Text('Riwayat Transaksi', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              Spacer(),
-              Text('Lihat Dashboard >', style: TextStyle(color: Color(0xFF3B82F6), fontSize: 12)),
+            children: [
+              Icon(Icons.history, color: theme.textSecondary),
+              const SizedBox(width: 12),
+              Text('Riwayat Transaksi', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              const Text('Lihat Dashboard >', style: TextStyle(color: Color(0xFF3B82F6), fontSize: 12)),
             ],
           ),
           const SizedBox(height: 24),
@@ -306,15 +332,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             stream: _dbService.getRecentTransactions(limit: 5),
             builder: (context, snapshot) {
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Text('Belum ada aktivitas transaksi.', style: TextStyle(color: Colors.white38));
+                return Text('Belum ada aktivitas transaksi.', style: TextStyle(color: theme.textMuted));
               }
               return Column(
                 children: snapshot.data!.docs.map((doc) {
                   bool isIncome = doc['type'] == 'Pemasukan';
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text(doc['category'], style: const TextStyle(color: Colors.white, fontSize: 14)),
-                    subtitle: Text(doc['note'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                    title: Text(doc['category'], style: TextStyle(color: theme.textPrimary, fontSize: 14)),
+                    subtitle: Text(doc['note'] ?? '', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                     trailing: Text(
                       currencyFormatter.format(doc['amount']),
                       style: TextStyle(color: isIncome ? Colors.blue : Colors.red, fontWeight: FontWeight.bold),
@@ -330,17 +356,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildPreferensiKeamanan(bool emailNotif, bool autoLogout) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.security, color: Colors.white70),
-              SizedBox(width: 12),
-              Text('Preferensi Keamanan', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            children: [
+              Icon(Icons.security, color: theme.textSecondary),
+              const SizedBox(width: 12),
+              Text('Preferensi Keamanan', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 24),
@@ -363,14 +394,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _switchRow(String title, String subtitle, bool val, Function(bool) onChanged) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              Text(title, style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
+              Text(subtitle, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
             ],
           ),
         ),

@@ -5,7 +5,46 @@ class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   String get uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  // --- TRANSACTIONS ---
+  // --- CATEGORIES ---
+  // Add a new category for the current user
+  Future<Map<String, dynamic>> addCategory({required String name}) async {
+    try {
+      if (uid.isEmpty) return {'success': false, 'error': 'User ID is empty.'};
+      DocumentReference userRef = _db.collection('users').doc(uid);
+      await userRef.collection('categories').add({'name': name, 'createdAt': FieldValue.serverTimestamp()});
+      return {'success': true, 'error': null};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // Stream of categories for the current user
+  Stream<QuerySnapshot> getCategories() {
+    return _db.collection('users').doc(uid).collection('categories').orderBy('createdAt', descending: false).snapshots();
+  }
+
+  // Update a category name
+  Future<Map<String, dynamic>> updateCategory({required String categoryId, required String newName}) async {
+    try {
+      if (uid.isEmpty) return {'success': false, 'error': 'User ID is empty.'};
+      await _db.collection('users').doc(uid).collection('categories').doc(categoryId).update({'name': newName});
+      return {'success': true, 'error': null};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // Delete a category
+  Future<Map<String, dynamic>> deleteCategory({required String categoryId}) async {
+    try {
+      if (uid.isEmpty) return {'success': false, 'error': 'User ID is empty.'};
+      await _db.collection('users').doc(uid).collection('categories').doc(categoryId).delete();
+      return {'success': true, 'error': null};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
 
   // Add a new transaction
   Future<Map<String, dynamic>> addTransaction({
@@ -143,6 +182,16 @@ class DatabaseService {
         .collection('transactions')
         .orderBy('timestamp', descending: true)
         .snapshots();
+  }
+
+  // Future of all transactions (for Excel Export)
+  Future<QuerySnapshot> getAllTransactionsOnce() {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('transactions')
+        .orderBy('timestamp', descending: true)
+        .get();
   }
 
   // --- FIXED EXPENSES (KEBUTUHAN WAJIB) ---

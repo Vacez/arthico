@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../services/database_service.dart';
+import '../providers/theme_provider.dart';
 import 'package:intl/intl.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -23,6 +25,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _showEditTransactionDialog(String id, Map<String, dynamic> data) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     final amountController = TextEditingController(text: data['amount'].toString());
     final noteController = TextEditingController(text: data['note'] ?? '');
 
@@ -37,8 +40,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
-          title: const Text('Edit Transaksi', style: TextStyle(color: Colors.white)),
+          backgroundColor: theme.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Edit Transaksi', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -58,20 +62,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 TextField(
                   controller: amountController,
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: theme.textPrimary),
+                  decoration: InputDecoration(
                     labelText: 'Nominal', 
-                    labelStyle: TextStyle(color: Colors.white60),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                    labelStyle: TextStyle(color: theme.textSecondary),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
                   ),
                 ),
                 TextField(
                   controller: noteController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: theme.textPrimary),
+                  decoration: InputDecoration(
                     labelText: 'Keterangan', 
-                    labelStyle: TextStyle(color: Colors.white60),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                    labelStyle: TextStyle(color: theme.textSecondary),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
                   ),
                 ),
               ],
@@ -80,10 +86,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: Colors.white60)),
+              child: Text('Batal', style: TextStyle(color: theme.textSecondary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.accent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               onPressed: () async {
                 double newAmount = double.tryParse(amountController.text) ?? 0;
                 await _dbService.updateTransaction(
@@ -98,7 +107,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 );
                 if (mounted) Navigator.pop(context);
               },
-              child: const Text('Simpan', style: TextStyle(color: Colors.white)),
+              child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -107,17 +116,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildDropdown(String label, String value, List<String> items, Function(String?) onChanged) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+        Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
         Theme(
-          data: Theme.of(context).copyWith(canvasColor: const Color(0xFF1E293B)),
+          data: Theme.of(context).copyWith(canvasColor: theme.card),
           child: DropdownButton<String>(
             value: value,
             isExpanded: true,
-            underline: Container(height: 1, color: Colors.white24),
-            style: const TextStyle(color: Colors.white),
+            underline: Container(height: 1, color: theme.border),
+            style: TextStyle(color: theme.textPrimary),
             items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
             onChanged: onChanged,
           ),
@@ -129,36 +139,59 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: theme.navBg,
+        elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Histori Transaksi', style: TextStyle(color: Colors.white, fontSize: 16)),
-            Text(DateFormat('MMMM yyyy').format(_selectedDate), style: const TextStyle(color: Colors.white38, fontSize: 11)),
+            Text('Histori Transaksi', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(DateFormat('MMMM yyyy').format(_selectedDate), style: TextStyle(color: theme.textSecondary, fontSize: 11)),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_month, color: Color(0xFF818CF8)),
+            icon: Icon(Icons.calendar_month, color: theme.accent),
             onPressed: () async {
               final picked = await showDatePicker(
                 context: context,
                 initialDate: _selectedDate,
                 firstDate: DateTime(2020),
                 lastDate: DateTime(2030),
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: ColorScheme(
+                        brightness: theme.isDark ? Brightness.dark : Brightness.light,
+                        primary: const Color(0xFF818CF8),
+                        onPrimary: Colors.white,
+                        surface: theme.card,
+                        onSurface: theme.textPrimary,
+                        secondary: theme.accent,
+                        onSecondary: Colors.white,
+                        error: Colors.red,
+                        onError: Colors.white,
+                      ),
+                    ),
+                    child: child!,
+                  );
+                },
               );
               if (picked != null) setState(() => _selectedDate = picked);
             },
           ),
         ],
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: theme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: theme.navBorder, height: 1),
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _dbService.getAllTransactions(),
@@ -174,7 +207,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return d.month == _selectedDate.month && d.year == _selectedDate.year;
           }).toList();
 
-          if (docs.isEmpty) return const Center(child: Text('Tidak ada transaksi di bulan ini', style: TextStyle(color: Colors.white38)));
+          if (docs.isEmpty) return Center(child: Text('Tidak ada transaksi di bulan ini', style: TextStyle(color: theme.textMuted)));
 
           return ListView.builder(
             itemCount: docs.length,
@@ -188,8 +221,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: theme.card,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: theme.border),
                 ),
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -201,7 +235,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   title: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(data['category'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(data['category'], style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                       Text(currencyFormatter.format(data['amount']), 
                         style: TextStyle(color: isIncome ? Colors.blueAccent : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)),
                     ],
@@ -210,14 +244,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 4),
-                      Text(data['note'] ?? '-', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                      Text(data['note'] ?? '-', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Icon(Icons.access_time, size: 10, color: Colors.white24),
+                          Icon(Icons.access_time, size: 10, color: theme.textMuted),
                           const SizedBox(width: 4),
                           Text(DateFormat('dd MMM yyyy, HH:mm').format(date), 
-                            style: const TextStyle(color: Colors.white24, fontSize: 10)),
+                            style: TextStyle(color: theme.textMuted, fontSize: 10)),
                           const SizedBox(width: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -233,12 +267,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ],
                   ),
                   trailing: PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: Colors.white54, size: 20),
-                    color: const Color(0xFF1E293B),
+                    icon: Icon(Icons.more_vert, color: theme.textSecondary, size: 20),
+                    color: theme.card,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     itemBuilder: (context) => [
-                      const PopupMenuItem(value: 'edit', child: Row(
-                        children: [Icon(Icons.edit, size: 16, color: Colors.white), SizedBox(width: 8), Text('Edit', style: TextStyle(color: Colors.white))],
+                      PopupMenuItem(value: 'edit', child: Row(
+                        children: [Icon(Icons.edit, size: 16, color: theme.textPrimary), const SizedBox(width: 8), Text('Edit', style: TextStyle(color: theme.textPrimary))],
                       )),
                       const PopupMenuItem(value: 'hapus', child: Row(
                         children: [Icon(Icons.delete, size: 16, color: Colors.redAccent), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: Colors.redAccent))],
@@ -251,11 +285,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         bool? confirm = await showDialog<bool>(
                           context: context,
                           builder: (context) => AlertDialog(
-                            backgroundColor: const Color(0xFF1E293B),
-                            title: const Text('Hapus Transaksi?', style: TextStyle(color: Colors.white)),
-                            content: const Text('Saldo Anda akan dikembalikan secara otomatis.', style: TextStyle(color: Colors.white70)),
+                            backgroundColor: theme.card,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            title: Text('Hapus Transaksi?', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
+                            content: Text('Saldo Anda akan dikembalikan secara otomatis.', style: TextStyle(color: theme.textSecondary)),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Batal', style: TextStyle(color: theme.textSecondary))),
                               TextButton(
                                 onPressed: () => Navigator.pop(context, true), 
                                 child: const Text('Hapus', style: TextStyle(color: Colors.redAccent)),
