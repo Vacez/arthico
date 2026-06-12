@@ -11,8 +11,6 @@ import 'package:excel/excel.dart' hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
-import 'package:flutter/rendering.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_saver/file_saver.dart';
@@ -445,32 +443,80 @@ class _LaporanScreenState extends State<LaporanScreen> {
     );
   }
 
+  String _sanitizeForPdf(String text) {
+    // Keep only printable ASCII characters (between space 32 and tilde 126) to prevent PDF Unicode crashes
+    return text.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
+  }
+
   Future<void> _exportPdf() async {
     final pdf = pw.Document();
-    // Capture chart as image
-    Uint8List? chartImage;
-    try {
-      final boundary = _chartKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary != null) {
-        final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        chartImage = byteData?.buffer.asUint8List();
+    
+    // Fetch transactions
+    final snapshot = await _dbService.getAllTransactionsOnce();
+    List<List<String>> transactionsData = [];
+    
+    if (snapshot.docs.isNotEmpty) {
+      // Sort transactions oldest to newest
+      final docs = List<QueryDocumentSnapshot>.from(snapshot.docs);
+      docs.sort((a, b) {
+        final tsA = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+        final tsB = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+        if (tsA == null || tsB == null) return 0;
+        return tsA.compareTo(tsB);
+      });
+
+      for (var doc in docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] as Timestamp?;
+        if (timestamp == null) continue;
+        DateTime date = timestamp.toDate();
+        
+        // Filter by period (same month and year)
+        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          final category = _sanitizeForPdf(data['category'] ?? '-');
+          final note = _sanitizeForPdf(data['note'] ?? '');
+          final type = data['type'] ?? '-';
+          final amountFormatted = currencyFormatter.format(data['amount'] ?? 0);
+          
+          transactionsData.add([
+            DateFormat('dd/MM/yyyy').format(date),
+            category,
+            note,
+            type,
+            amountFormatted,
+          ]);
+        }
       }
-    } catch (e) {
-      // ignore errors, proceed without chart image
     }
-    pdf.addPage(pw.Page(build: (pw.Context context) {
-      return pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text('Laporan Keuangan', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (pw.Context context) {
+        return [
+          pw.Header(
+            level: 0,
+            child: pw.Text('Laporan Keuangan', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 14)),
           pw.SizedBox(height: 20),
-          if (chartImage != null) pw.Image(pw.MemoryImage(chartImage), width: double.infinity, height: 200),
-          pw.SizedBox(height: 20),
-          pw.Text('Periode: \'${DateFormat('MMM yyyy').format(_selectedDate)}\'', style: pw.TextStyle(fontSize: 16)),
-        ],
-      );
-    }));
+          if (transactionsData.isEmpty)
+            pw.Text('Tidak ada transaksi pada periode ini.', style: const pw.TextStyle(fontSize: 12))
+          else
+            pw.TableHelper.fromTextArray(
+              headers: ['Tanggal', 'Kategori', 'Keterangan', 'Tipe', 'Jumlah'],
+              data: transactionsData,
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+              cellAlignment: pw.Alignment.centerLeft,
+              cellAlignments: {
+                4: pw.Alignment.centerRight, // Align amount column to right
+              },
+            ),
+        ];
+      },
+    ));
+
     // Conditional handling for web vs mobile/desktop
     if (kIsWeb) {
       // On web, sharePdf triggers a download dialog
@@ -487,32 +533,32 @@ class _LaporanScreenState extends State<LaporanScreen> {
     var excel = Excel.createExcel();
     Sheet sheet = excel["Sheet1"];
     // Header row
-    sheet.appendRow(["Tanggal", "Kategori", "Tipe", "Jumlah"]);
+    sheet.appendRow(["Tanggal", "Kategori", "Keterangan", "Tipe", "Jumlah"]);
     // Fetch transactions
     final snapshot = await _dbService.getAllTransactionsOnce();
     if (snapshot.docs.isNotEmpty) {
-      for (var doc in snapshot.docs) {
+      // Sort transactions oldest to newest
+      final docs = List<QueryDocumentSnapshot>.from(snapshot.docs);
+      docs.sort((a, b) {
+        final tsA = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+        final tsB = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+        if (tsA == null || tsB == null) return 0;
+        return tsA.compareTo(tsB);
+      });
+
+      for (var doc in docs) {
         final data = doc.data() as Map<String, dynamic>;
         final timestamp = data['timestamp'] as Timestamp?;
         if (timestamp == null) continue;
         DateTime date = timestamp.toDate();
         // Filter by period
-        bool include = false;
-        if (_isWeekly) {
-          if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-            include = true;
-          }
-        } else {
-          if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-            include = true;
-          }
-        }
-        if (include) {
+        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
           sheet.appendRow([
             DateFormat('dd/MM/yyyy').format(date),
             data['category'] ?? '-',
+            data['note'] ?? '',
             data['type'] ?? '-',
-            data['amount']?.toString() ?? '0',
+            currencyFormatter.format(data['amount'] ?? 0),
           ]);
         }
       }
