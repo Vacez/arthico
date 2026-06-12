@@ -22,7 +22,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final AuthService _auth = AuthService();
   final DatabaseService _dbService = DatabaseService();
   final User? user = FirebaseAuth.instance.currentUser;
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -91,12 +90,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showAddCategorySheet() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     final formKey = GlobalKey<FormState>();
     String newName = '';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: theme.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -110,17 +110,17 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Tambah Kategori Baru',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.textPrimary),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: theme.textPrimary),
                   decoration: InputDecoration(
                     labelText: 'Nama Kategori',
-                    labelStyle: const TextStyle(color: Colors.white60),
-                    fillColor: const Color(0xFF0F172A),
+                    labelStyle: TextStyle(color: theme.textSecondary),
+                    fillColor: theme.inputBg,
                     filled: true,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
@@ -900,6 +900,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildChartArea() {
+    final theme = Provider.of<ThemeProvider>(context);
     return StreamBuilder<QuerySnapshot>(
       stream: _dbService.getAllTransactions(),
       builder: (context, snapshot) {
@@ -984,7 +985,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: theme.card,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -994,7 +995,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                    Text(
                     _chartFilter == 'Mingguan' ? 'Trend 7 Hari Terakhir' : 'Trend Bulanan ${DateFormat('MMM yyyy').format(_selectedDate)}', 
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
+                    style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)
                   ),
                   const Spacer(),
                   _buildToggleFilter(),
@@ -1012,7 +1013,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         maxY: _calculateMaxY(incomeMap, expenseMap),
                         barGroups: barGroups,
                         borderData: FlBorderData(show: false),
-                        gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (val) => FlLine(color: Colors.white10, strokeWidth: 1)),
+                        gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (val) => FlLine(color: theme.isDark ? Colors.white10 : Colors.black12, strokeWidth: 1)),
                         titlesData: FlTitlesData(
                           show: true,
                           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -1025,7 +1026,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 if (val.toInt() >= labels.length) return const SizedBox();
                                 return Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
-                                  child: Text(labels[val.toInt()], style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                                  child: Text(labels[val.toInt()], style: TextStyle(color: theme.textMuted, fontSize: 9)),
                                 );
                               }
                             ),
@@ -1051,9 +1052,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildToggleFilter() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: theme.isDark ? const Color(0xFF0F172A) : theme.inputBg,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1067,6 +1069,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _filterBtn(String label) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     bool isActive = _chartFilter == label;
     return GestureDetector(
       onTap: () => setState(() => _chartFilter = label),
@@ -1078,7 +1081,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Text(
           label, 
-          style: TextStyle(color: isActive ? Colors.white : Colors.white38, fontSize: 11, fontWeight: FontWeight.bold)
+          style: TextStyle(color: isActive ? Colors.white : theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)
         ),
       ),
     );
@@ -1092,33 +1095,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _chartLegend(String label, Color color) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Row(
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 8),
-        Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 11)),
       ],
     );
   }
 
   Widget _buildRecentActivity() {
+    final theme = Provider.of<ThemeProvider>(context);
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: theme.card,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Aktivitas Terbaru', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('Aktivitas Terbaru', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           StreamBuilder<QuerySnapshot>(
             stream: _dbService.getRecentTransactions(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Center(child: Text('Belum ada transaksi', style: TextStyle(color: Colors.white38)));
+                return Center(child: Text('Belum ada transaksi', style: TextStyle(color: theme.textMuted)));
               }
               return Column(
                 children: snapshot.data!.docs.where((doc) {
@@ -1136,8 +1141,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: BoxDecoration(color: isIncome ? Colors.orange.withOpacity(0.1) : Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                       child: Icon(isIncome ? Icons.arrow_upward : Icons.arrow_downward, color: isIncome ? Colors.orange : Colors.green, size: 16),
                     ),
-                    title: Text(doc['category'], style: const TextStyle(color: Colors.white, fontSize: 14)),
-                    subtitle: Text(doc['note'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                    title: Text(doc['category'], style: TextStyle(color: theme.textPrimary, fontSize: 14)),
+                    subtitle: Text(doc['note'] ?? '', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                     trailing: Text(
                       currencyFormatter.format(doc['amount']),
                       style: TextStyle(color: isIncome ? Colors.orange : Colors.green, fontWeight: FontWeight.bold),
@@ -1165,6 +1170,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHabitBanner() {
+    final theme = Provider.of<ThemeProvider>(context);
     return StreamBuilder<QuerySnapshot>(
       stream: _dbService.getAllTransactions(),
       builder: (context, snapshot) {
@@ -1198,8 +1204,8 @@ class _HomeScreenState extends State<HomeScreen> {
           return Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
-            child: const Center(child: Text('Belum ada pengeluaran dicatat bulan ini.', style: TextStyle(color: Colors.white38))),
+            decoration: BoxDecoration(color: theme.card, borderRadius: BorderRadius.circular(16)),
+            child: Center(child: Text('Belum ada pengeluaran dicatat bulan ini.', style: TextStyle(color: theme.textMuted))),
           );
         }
 
@@ -1224,17 +1230,17 @@ class _HomeScreenState extends State<HomeScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: theme.card,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.psychology, color: Color(0xFFF472B6)),
-                  SizedBox(width: 8),
-                  Text('Analisis Kebiasaan Keuangan', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Icon(Icons.psychology, color: Color(0xFFF472B6)),
+                  const SizedBox(width: 8),
+                  Text('Analisis Kebiasaan Keuangan', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 24),
@@ -1256,12 +1262,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Pengeluaran Terbesar:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        Text('Pengeluaran Terbesar:', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                         const SizedBox(height: 4),
-                        Text(largestExpenseNote, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                        Text(largestExpenseNote, style: TextStyle(color: theme.textPrimary, fontSize: 15, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                         Text(currencyFormatter.format(largestExpenseAmount), style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
-                        const Text('Distribusi Kategori:', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                        Text('Distribusi Kategori:', style: TextStyle(color: theme.textSecondary, fontSize: 11)),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -1272,7 +1278,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 Container(width: 8, height: 8, decoration: BoxDecoration(color: colors[e.key % colors.length], shape: BoxShape.circle)),
                                 const SizedBox(width: 4),
-                                Text(e.value, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                Text(e.value, style: TextStyle(color: theme.textMuted, fontSize: 10)),
                               ],
                             );
                           }).toList(),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:email_otp/email_otp.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../providers/theme_provider.dart';
 
 class VerifyOtpScreen extends StatefulWidget {
   final String name;
@@ -172,13 +174,14 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeProvider>(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.bg,
       appBar: AppBar(
-        title: const Text('Verifikasi Email', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1E293B),
+        title: Text('Verifikasi Email', style: TextStyle(color: theme.textPrimary)),
+        backgroundColor: theme.card,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: theme.textPrimary),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -187,7 +190,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
             child: Container(
               padding: const EdgeInsets.all(32.0),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: theme.card,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
@@ -201,49 +204,49 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.mark_email_unread_outlined,
                     size: 80,
-                    color: Color(0xFF818CF8),
+                    color: theme.accent,
                   ),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     'Masukkan Kode OTP',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 24.0,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: theme.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Kode telah dikirim ke:\n${widget.otpMethod == 'email' ? widget.email : widget.phone}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    style: TextStyle(
+                      color: theme.textSecondary,
                       fontSize: 16.0,
                     ),
                   ),
                   const SizedBox(height: 32),
                   TextFormField(
-                    style: const TextStyle(color: Colors.white, fontSize: 24, letterSpacing: 8),
+                    style: TextStyle(color: theme.textPrimary, fontSize: 24, letterSpacing: 8),
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
                     maxLength: 6,
                     decoration: InputDecoration(
                       hintText: '••••••',
-                      hintStyle: const TextStyle(color: Colors.white38),
-                      fillColor: const Color(0xFF0F172A),
+                      hintStyle: TextStyle(color: theme.textMuted),
+                      fillColor: theme.inputBg,
                       filled: true,
                       contentPadding: const EdgeInsets.symmetric(vertical: 16),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.white12),
+                        borderSide: BorderSide(color: theme.border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF818CF8), width: 2),
+                        borderSide: BorderSide(color: theme.accent, width: 2),
                       ),
                       counterText: "",
                     ),
@@ -289,8 +292,8 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
                   TextButton(
                     onPressed: isResending ? null : _resendOTP,
                     child: isResending 
-                        ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Color(0xFF818CF8), strokeWidth: 2))
-                        : const Text('Kirim Ulang OTP', style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.bold)),
+                        ? SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: theme.accent, strokeWidth: 2))
+                        : Text('Kirim Ulang OTP', style: TextStyle(color: theme.accent, fontWeight: FontWeight.bold)),
                   ),
                   if (error.isNotEmpty) ...[
                     const SizedBox(height: 16.0),

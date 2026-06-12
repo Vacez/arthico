@@ -166,7 +166,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Provider.of<ThemeProvider>(context);
     return StreamBuilder<DocumentSnapshot>(
       stream: _dbService.getUserData(),
       builder: (context, userSnapshot) {
@@ -356,7 +355,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildPreferensiKeamanan(bool emailNotif, bool autoLogout) {
-    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final theme = Provider.of<ThemeProvider>(context);
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -387,6 +386,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Logout otomatis setelah 30 menit inaktif', 
             autoLogout,
             (val) => _dbService.updateUserPreference('autoLogout', val),
+          ),
+          const Divider(color: Colors.white12, height: 32),
+          _switchRow(
+            'Mode Gelap', 
+            'Aktifkan tampilan mode gelap atau terang', 
+            theme.isDark,
+            (val) => theme.toggleTheme(),
           ),
         ],
       ),
