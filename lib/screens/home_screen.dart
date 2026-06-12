@@ -1143,7 +1143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: Text(doc['category'], style: TextStyle(color: theme.textPrimary, fontSize: 14)),
                     subtitle: Text(doc['note'] ?? '', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                     trailing: Text(
-                      currencyFormatter.format(doc['amount']),
+                      (isIncome ? '' : '- ') + currencyFormatter.format(doc['amount']),
                       style: TextStyle(color: isIncome ? Colors.orange : Colors.green, fontWeight: FontWeight.bold),
                     ),
                   );

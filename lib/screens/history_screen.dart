@@ -236,8 +236,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(data['category'], style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                      Text(currencyFormatter.format(data['amount']), 
-                        style: TextStyle(color: isIncome ? Colors.blueAccent : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(
+                        (isIncome ? '' : '- ') + currencyFormatter.format(data['amount']), 
+                        style: TextStyle(color: isIncome ? Colors.blueAccent : Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
                     ],
                   ),
                   subtitle: Column(

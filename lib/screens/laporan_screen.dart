@@ -434,7 +434,10 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   leading: Icon(isIncome ? Icons.add_circle : Icons.remove_circle, color: isIncome ? Colors.blue : Colors.red),
                   title: Text(data['category'] ?? '-', style: TextStyle(color: theme.textPrimary)),
                   subtitle: Text(data['note'] ?? '', style: TextStyle(color: theme.textSecondary)),
-                  trailing: Text(currencyFormatter.format(data['amount'] ?? 0), style: TextStyle(color: isIncome ? Colors.blue : Colors.red, fontWeight: FontWeight.bold)),
+                  trailing: Text(
+                    (isIncome ? '' : '- ') + currencyFormatter.format(data['amount'] ?? 0),
+                    style: TextStyle(color: isIncome ? Colors.blue : Colors.red, fontWeight: FontWeight.bold),
+                  ),
                 );
               },
             ),
@@ -473,10 +476,11 @@ class _LaporanScreenState extends State<LaporanScreen> {
         
         // Filter by period (same month and year)
         if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          final isIncome = data['type'] == 'Pemasukan';
           final category = _sanitizeForPdf(data['category'] ?? '-');
           final note = _sanitizeForPdf(data['note'] ?? '');
           final type = data['type'] ?? '-';
-          final amountFormatted = currencyFormatter.format(data['amount'] ?? 0);
+          final amountFormatted = (isIncome ? '' : '-') + currencyFormatter.format(data['amount'] ?? 0);
           
           transactionsData.add([
             DateFormat('dd/MM/yyyy').format(date),
@@ -553,12 +557,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
         DateTime date = timestamp.toDate();
         // Filter by period
         if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          final isIncome = data['type'] == 'Pemasukan';
           sheet.appendRow([
             DateFormat('dd/MM/yyyy').format(date),
             data['category'] ?? '-',
             data['note'] ?? '',
             data['type'] ?? '-',
-            currencyFormatter.format(data['amount'] ?? 0),
+            (isIncome ? '' : '-') + currencyFormatter.format(data['amount'] ?? 0),
           ]);
         }
       }

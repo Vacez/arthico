@@ -341,7 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: Text(doc['category'], style: TextStyle(color: theme.textPrimary, fontSize: 14)),
                     subtitle: Text(doc['note'] ?? '', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
                     trailing: Text(
-                      currencyFormatter.format(doc['amount']),
+                      (isIncome ? '' : '- ') + currencyFormatter.format(doc['amount']),
                       style: TextStyle(color: isIncome ? Colors.blue : Colors.red, fontWeight: FontWeight.bold),
                     ),
                   );
