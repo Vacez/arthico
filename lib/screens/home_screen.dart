@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _noteController = TextEditingController();
   bool _isSaving = false;
   DateTime _selectedDate = DateTime.now();
+  DateTime _transactionDate = DateTime.now();
   String _chartFilter = 'Mingguan';
 
   List<String> _expenseCategories = ['Makan', 'Transport', 'Belanja', 'Hiburan', 'Lainnya'];
@@ -195,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -248,7 +250,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildNavbar() {
     final theme = Provider.of<ThemeProvider>(context);
-    bool isMobile = MediaQuery.of(context).size.width < 600;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -261,82 +262,115 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.account_balance_wallet, color: theme.accent, size: 24),
-              if (!isMobile) ...[
-                const SizedBox(width: 8),
-                Text(
-                  'Arthico',
-                  style: TextStyle(color: theme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: theme.accent, width: 1.5),
+                  image: const DecorationImage(
+                    image: AssetImage('assets/logo.jpg'),
+                    fit: BoxFit.cover,
+                  ),
                 ),
-              ],
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Arthico',
+                style: TextStyle(color: theme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  _navItem(isMobile ? 'Home' : 'Dashboard', Icons.home, _activeScreenIndex == 0, 0),
-                  _navItem('Goals', Icons.track_changes, _activeScreenIndex == 1, 1),
-                  _navItem('Laporan', Icons.bar_chart, _activeScreenIndex == 2, 2),
-                ],
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Theme toggle button
+              GestureDetector(
+                onTap: () => theme.toggleTheme(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    theme.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                    color: theme.isDark ? const Color(0xFFFBBF24) : const Color(0xFF6366F1),
+                    size: 20,
+                  ),
+                ),
               ),
-            ),
-          ),
-          // Theme toggle button
-          GestureDetector(
-            onTap: () => theme.toggleTheme(),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(10),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => _goToPage(3),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: const Color(0xFF10B981),
+                  child: Text(user?.displayName?.substring(0, 1).toUpperCase() ?? 'A',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
               ),
-              child: Icon(
-                theme.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                color: theme.isDark ? const Color(0xFFFBBF24) : const Color(0xFF6366F1),
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => _goToPage(3),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF10B981),
-              child: Text(user?.displayName?.substring(0, 1).toUpperCase() ?? 'A',
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _navItem(String label, IconData icon, bool isActive, int index) {
+  Widget _buildBottomNavigationBar() {
+    final theme = Provider.of<ThemeProvider>(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.isDark ? const Color(0xFF1E293B).withOpacity(0.9) : Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(color: theme.isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _bottomNavItem(Icons.grid_view_rounded, _activeScreenIndex == 0, 0),
+              _bottomNavItem(Icons.track_changes_rounded, _activeScreenIndex == 1, 1),
+              _bottomNavItem(Icons.bar_chart_rounded, _activeScreenIndex == 2, 2),
+              _bottomNavItem(Icons.person_rounded, _activeScreenIndex == 3, 3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomNavItem(IconData icon, bool isActive, int index) {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     return GestureDetector(
       onTap: () => _goToPage(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        margin: const EdgeInsets.only(left: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        width: 50,
+        height: 50,
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF6366F1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          shape: BoxShape.circle,
+          color: isActive ? const Color(0xFF10B981) : Colors.transparent,
+          boxShadow: isActive 
+              ? [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 12, spreadRadius: 2, offset: const Offset(0, 4))]
+              : null,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: isActive ? Colors.white : theme.textMuted, size: 18),
-            if (label.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(color: isActive ? Colors.white : theme.textMuted, fontWeight: FontWeight.w500)),
-            ],
-          ],
+        child: Icon(
+          icon,
+          color: isActive ? Colors.white : (theme.isDark ? Colors.white38 : Colors.black38),
+          size: 24,
         ),
       ),
     );
@@ -715,26 +749,67 @@ class _HomeScreenState extends State<HomeScreen> {
                     (val) => setState(() => _selectedCategory = val!)
                   ),
                   _formDropdown('Alokasi Dana', _selectedAllocation, fieldWidth, ['Sekunder', 'Primer'], (val) => setState(() => _selectedAllocation = val!)),
-                  _formInputWidget('Nominal (Rp)', _amountController, constraints.maxWidth < 600 ? constraints.maxWidth : constraints.maxWidth * 0.6, TextInputType.number),
+                  _formDatePicker('Tanggal', _transactionDate, fieldWidth, () async {
+                    final DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate: _transactionDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: ColorScheme(
+                              brightness: theme.isDark ? Brightness.dark : Brightness.light,
+                              primary: const Color(0xFF818CF8),
+                              onPrimary: Colors.white,
+                              surface: theme.card,
+                              onSurface: theme.textPrimary,
+                              secondary: theme.accent,
+                              onSecondary: Colors.white,
+                              error: Colors.red,
+                              onError: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (picked != null && picked != _transactionDate) {
+                      setState(() {
+                        _transactionDate = picked;
+                      });
+                    }
+                  }),
+                  _formInputWidget('Nominal (Rp)', _amountController, fieldWidth, TextInputType.number),
                   SizedBox(
-                    width: constraints.maxWidth < 600 ? constraints.maxWidth : constraints.maxWidth * 0.35,
-                    height: 50,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)]),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    width: fieldWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('', style: TextStyle(fontSize: 14)),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 48,
+                          width: double.infinity,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)]),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: _isSaving ? null : _saveTransaction,
+                              child: _isSaving 
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                : const Text('Simpan Transaksi', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                            ),
+                          ),
                         ),
-                        onPressed: _isSaving ? null : _saveTransaction,
-                        child: _isSaving 
-                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Simpan Transaksi', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
+                      ],
                     ),
                   ),
                 ],
@@ -773,6 +848,7 @@ class _HomeScreenState extends State<HomeScreen> {
       allocation: _selectedAllocation,
       amount: amount,
       note: _noteController.text,
+      customTimestamp: _transactionDate,
     );
     
     if (result['success']) {
@@ -780,6 +856,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isSaving = false;
         _amountController.clear();
         _noteController.clear();
+        _transactionDate = DateTime.now();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Transaksi berhasil disimpan!'), backgroundColor: Colors.green),
@@ -820,6 +897,41 @@ class _HomeScreenState extends State<HomeScreen> {
                 isExpanded: true,
                 items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _formDatePicker(String label, DateTime value, double width, VoidCallback onTap) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return SizedBox(
+      width: width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 14)),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: theme.inputBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    DateFormat('dd/MM/yyyy').format(value),
+                    style: TextStyle(color: theme.textPrimary),
+                  ),
+                  Icon(Icons.calendar_today, size: 16, color: theme.textSecondary),
+                ],
               ),
             ),
           ),

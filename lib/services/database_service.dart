@@ -53,6 +53,7 @@ class DatabaseService {
     required String allocation,
     required double amount,
     required String note,
+    DateTime? customTimestamp,
   }) async {
     try {
       if (uid.isEmpty) return {'success': false, 'error': 'User ID is empty.'};
@@ -73,7 +74,9 @@ class DatabaseService {
         'allocation': allocation,
         'amount': amount,
         'note': note,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': customTimestamp != null
+            ? Timestamp.fromDate(customTimestamp)
+            : FieldValue.serverTimestamp(),
       });
 
       // 3. Update balance
@@ -111,6 +114,8 @@ class DatabaseService {
       
       double amount = (transData['amount'] ?? 0).toDouble();
       String type = transData['type'] ?? 'Pengeluaran';
+      String category = transData['category'] ?? '';
+      String? goalId = transData['goalId'];
       
       DocumentReference userRef = _db.collection('users').doc(uid);
       DocumentSnapshot userSnap = await userRef.get();
@@ -123,6 +128,41 @@ class DatabaseService {
       double newBalance = type == 'Pemasukan' ? balance - amount : balance + amount;
       
       await userRef.update({'balance': newBalance});
+
+      // If it was a savings transaction to a goal, subtract the amount from the goal
+      if (category == 'Tabungan') {
+        if (goalId != null && goalId.isNotEmpty) {
+          DocumentReference goalRef = userRef.collection('goals').doc(goalId);
+          DocumentSnapshot goalSnap = await goalRef.get();
+          if (goalSnap.exists) {
+            double currentGoalAmount = (goalSnap.get('currentAmount') ?? 0).toDouble();
+            double newGoalAmount = currentGoalAmount - amount;
+            if (newGoalAmount < 0) newGoalAmount = 0;
+            await goalRef.update({
+              'currentAmount': newGoalAmount,
+              'lastUpdated': FieldValue.serverTimestamp(),
+            });
+          }
+        } else {
+          // Fallback: match by note
+          String note = transData['note'] ?? '';
+          if (note.startsWith('Menabung untuk: ')) {
+            String goalTitle = note.replaceFirst('Menabung untuk: ', '');
+            QuerySnapshot goalSnaps = await userRef.collection('goals').where('title', isEqualTo: goalTitle).limit(1).get();
+            if (goalSnaps.docs.isNotEmpty) {
+              var doc = goalSnaps.docs.first;
+              double currentGoalAmount = (doc['currentAmount'] ?? 0).toDouble();
+              double newGoalAmount = currentGoalAmount - amount;
+              if (newGoalAmount < 0) newGoalAmount = 0;
+              await doc.reference.update({
+                'currentAmount': newGoalAmount,
+                'lastUpdated': FieldValue.serverTimestamp(),
+              });
+            }
+          }
+        }
+      }
+      
       await userRef.collection('transactions').doc(transactionId).delete();
       
       return {'success': true};
@@ -352,6 +392,7 @@ class DatabaseService {
         'amount': amount,
         'note': 'Menabung untuk: $goalTitle',
         'timestamp': FieldValue.serverTimestamp(),
+        'goalId': goalId,
       });
 
       // 3. Update User Balance
@@ -363,6 +404,36 @@ class DatabaseService {
       return {'success': true, 'error': null};
     } catch (e) {
       print("❌ SAVING ERROR: $e");
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // Update a goal's title and target amount
+  Future<Map<String, dynamic>> updateGoal({
+    required String goalId,
+    required String title,
+    required double targetAmount,
+  }) async {
+    try {
+      if (uid.isEmpty) return {'success': false, 'error': 'User ID is empty.'};
+      await _db.collection('users').doc(uid).collection('goals').doc(goalId).update({
+        'title': title,
+        'targetAmount': targetAmount,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+      return {'success': true, 'error': null};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // Delete a goal
+  Future<Map<String, dynamic>> deleteGoal(String goalId) async {
+    try {
+      if (uid.isEmpty) return {'success': false, 'error': 'User ID is empty.'};
+      await _db.collection('users').doc(uid).collection('goals').doc(goalId).delete();
+      return {'success': true, 'error': null};
+    } catch (e) {
       return {'success': false, 'error': e.toString()};
     }
   }

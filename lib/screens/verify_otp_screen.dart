@@ -204,10 +204,19 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.mark_email_unread_outlined,
-                    size: 80,
-                    color: theme.accent,
+                  Center(
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: theme.accent, width: 2),
+                        image: const DecorationImage(
+                          image: AssetImage('assets/logo.jpg'),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(

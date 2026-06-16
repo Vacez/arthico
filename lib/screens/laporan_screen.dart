@@ -41,180 +41,211 @@ class _LaporanScreenState extends State<LaporanScreen> {
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
     return StreamBuilder<QuerySnapshot>(
-      stream: _dbService.getAllTransactions(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
-        double income = 0;
-        double expense = 0;
-        List<BarChartGroupData> chartData = [];
-
-        if (snapshot.hasData) {
-          // Aggregate data based on selected period
-          if (_isWeekly) {
-            // Weekly aggregation within the selected month
-            Map<int, double> weeklyIncome = {};
-            Map<int, double> weeklyExpense = {};
-            for (var doc in snapshot.data!.docs) {
-              final data = doc.data() as Map<String, dynamic>;
-              final timestamp = data['timestamp'] as Timestamp?;
-              if (timestamp == null) continue;
-              DateTime date = timestamp.toDate();
-              if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-                int weekOfMonth = ((date.day - 1) ~/ 7) + 1; // 1-5
-                double amt = (data['amount'] ?? 0).toDouble();
-                if (data['type'] == 'Pemasukan') {
-                  weeklyIncome[weekOfMonth] = (weeklyIncome[weekOfMonth] ?? 0) + amt;
-                } else {
-                  weeklyExpense[weekOfMonth] = (weeklyExpense[weekOfMonth] ?? 0) + amt;
-                }
-              }
-            }
-            // Build chart data for each week
-            chartData = weeklyIncome.keys.map((week) {
-              double inc = weeklyIncome[week] ?? 0;
-              double exp = weeklyExpense[week] ?? 0;
-              return BarChartGroupData(
-                x: week,
-                barRods: [
-                  BarChartRodData(toY: inc, color: Colors.blue, width: 12),
-                  BarChartRodData(toY: exp, color: Colors.red, width: 12),
-                ],
-              );
-            }).toList();
-            // Sum totals for display
-            income = weeklyIncome.values.fold(0, (p, e) => p + e);
-            expense = weeklyExpense.values.fold(0, (p, e) => p + e);
-          } else {
-            // Existing monthly aggregation
-            for (var doc in snapshot.data!.docs) {
-              final data = doc.data() as Map<String, dynamic>;
-              final timestamp = data['timestamp'] as Timestamp?;
-              if (timestamp == null) continue;
-              DateTime date = timestamp.toDate();
-              if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-                double amt = (data['amount'] ?? 0).toDouble();
-                if (data['type'] == 'Pemasukan') {
-                  income += amt;
-                } else {
-                  expense += amt;
-                }
-              }
-            }
-            chartData = [
-              BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: income, color: Colors.blue, width: 20)]),
-              BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: expense, color: Colors.red, width: 20)]),
-            ];
+      stream: _dbService.getGoals(),
+      builder: (context, goalsSnapshot) {
+        double totalSavings = 0;
+        if (goalsSnapshot.hasData) {
+          for (var doc in goalsSnapshot.data!.docs) {
+            totalSavings += (doc['currentAmount'] ?? 0).toDouble();
           }
         }
 
-        double sisa = income - expense;
-        bool isMobile = MediaQuery.of(context).size.width < 700;
+        return StreamBuilder<QuerySnapshot>(
+          stream: _dbService.getAllTransactions(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
-        return Padding(
-          padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
-          child: Column(
-            children: [
-              Container(
-                padding: EdgeInsets.all(isMobile ? 16 : 24),
-                decoration: BoxDecoration(
-                  color: theme.card,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+            double income = 0;
+            double expense = 0;
+            double cumulativeBalance = 0;
+            List<BarChartGroupData> chartData = [];
+
+            if (snapshot.hasData) {
+              // Calculate cumulativeBalance up to the end of the selected month
+              for (var doc in snapshot.data!.docs) {
+                final data = doc.data() as Map<String, dynamic>;
+                final timestamp = data['timestamp'] as Timestamp?;
+                if (timestamp == null) continue;
+                DateTime date = timestamp.toDate();
+                
+                double amt = (data['amount'] ?? 0).toDouble();
+                bool isIncome = data['type'] == 'Pemasukan';
+                
+                if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+                  if (isIncome) {
+                    cumulativeBalance += amt;
+                  } else {
+                    cumulativeBalance -= amt;
+                  }
+                }
+              }
+
+              // Aggregate data based on selected period
+              if (_isWeekly) {
+                // Weekly aggregation within the selected month
+                Map<int, double> weeklyIncome = {};
+                Map<int, double> weeklyExpense = {};
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final timestamp = data['timestamp'] as Timestamp?;
+                  if (timestamp == null) continue;
+                  DateTime date = timestamp.toDate();
+                  if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+                    int weekOfMonth = ((date.day - 1) ~/ 7) + 1; // 1-5
+                    double amt = (data['amount'] ?? 0).toDouble();
+                    if (data['type'] == 'Pemasukan') {
+                      weeklyIncome[weekOfMonth] = (weeklyIncome[weekOfMonth] ?? 0) + amt;
+                    } else {
+                      weeklyExpense[weekOfMonth] = (weeklyExpense[weekOfMonth] ?? 0) + amt;
+                    }
+                  }
+                }
+                // Build chart data for each week
+                chartData = weeklyIncome.keys.map((week) {
+                  double inc = weeklyIncome[week] ?? 0;
+                  double exp = weeklyExpense[week] ?? 0;
+                  return BarChartGroupData(
+                    x: week,
+                    barRods: [
+                      BarChartRodData(toY: inc, color: Colors.blue, width: 12),
+                      BarChartRodData(toY: exp, color: Colors.red, width: 12),
+                    ],
+                  );
+                }).toList();
+                // Sum totals for display
+                income = weeklyIncome.values.fold(0, (p, e) => p + e);
+                expense = weeklyExpense.values.fold(0, (p, e) => p + e);
+              } else {
+                // Existing monthly aggregation
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final timestamp = data['timestamp'] as Timestamp?;
+                  if (timestamp == null) continue;
+                  DateTime date = timestamp.toDate();
+                  if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+                    double amt = (data['amount'] ?? 0).toDouble();
+                    if (data['type'] == 'Pemasukan') {
+                      income += amt;
+                    } else {
+                      expense += amt;
+                    }
+                  }
+                }
+                chartData = [
+                  BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: income, color: Colors.blue, width: 20)]),
+                  BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: expense, color: Colors.red, width: 20)]),
+                ];
+              }
+            }
+
+            bool isMobile = MediaQuery.of(context).size.width < 700;
+
+            return Padding(
+              padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
+              child: Column(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(isMobile ? 16 : 24),
+                    decoration: BoxDecoration(
+                      color: theme.card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: theme.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Icon(Icons.bar_chart, color: theme.accent),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('Laporan Keuangan', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                                Text(DateFormat('MMM yyyy').format(_selectedDate), style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                                Icon(Icons.bar_chart, color: theme.accent),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Laporan Keuangan', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                    Text(DateFormat('MMM yyyy').format(_selectedDate), style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                                  ],
+                                ),
                               ],
+                            ),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final DateTime? picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _selectedDate,
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2030),
+                                        builder: (context, child) {
+                                          return Theme(
+                                            data: Theme.of(context).copyWith(
+                                              colorScheme: ColorScheme(
+                                                brightness: theme.isDark ? Brightness.dark : Brightness.light,
+                                                primary: const Color(0xFF818CF8),
+                                                onPrimary: Colors.white,
+                                                surface: theme.card,
+                                                onSurface: theme.textPrimary,
+                                                secondary: theme.accent,
+                                                onSecondary: Colors.white,
+                                                error: Colors.red,
+                                                onError: Colors.white,
+                                              ),
+                                            ),
+                                            child: child!,
+                                          );
+                                        },
+                                      );
+                                      if (picked != null) setState(() => _selectedDate = picked);
+                                    },
+                                    child: _filterDropdown(DateFormat('MMM yyyy').format(_selectedDate)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _actionButton('PDF', const Color(0xFFEF4444), () => _exportPdf()),
+                                  const SizedBox(width: 8),
+                                  _actionButton('Excel', const Color(0xFF10B981), () => _exportExcel()),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: () async {
-                                  final DateTime? picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: _selectedDate,
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime(2030),
-                                    builder: (context, child) {
-                                      return Theme(
-                                        data: Theme.of(context).copyWith(
-                                          colorScheme: ColorScheme(
-                                            brightness: theme.isDark ? Brightness.dark : Brightness.light,
-                                            primary: const Color(0xFF818CF8),
-                                            onPrimary: Colors.white,
-                                            surface: theme.card,
-                                            onSurface: theme.textPrimary,
-                                            secondary: theme.accent,
-                                            onSecondary: Colors.white,
-                                            error: Colors.red,
-                                            onError: Colors.white,
-                                          ),
-                                        ),
-                                        child: child!,
-                                      );
-                                    },
-                                  );
-                                  if (picked != null) setState(() => _selectedDate = picked);
-                                },
-                                child: _filterDropdown(DateFormat('MMM yyyy').format(_selectedDate)),
-                              ),
-                              const SizedBox(width: 8),
-                              _actionButton('PDF', const Color(0xFFEF4444), () => _exportPdf()),
-                              const SizedBox(width: 8),
-                              _actionButton('Excel', const Color(0xFF10B981), () => _exportExcel()),
-                            ],
-                          ),
-                        ),
+                        const SizedBox(height: 24),
+                        isMobile 
+                          ? Column(
+                              children: [
+                                _buildChartArea(chartData),
+                                const SizedBox(height: 24),
+                                _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings),
+                              ],
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 2, child: _buildChartArea(chartData)),
+                                const SizedBox(width: 24),
+                                Expanded(flex: 1, child: _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings)),
+                              ],
+                            ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    isMobile 
-                      ? Column(
-                          children: [
-                            _buildChartArea(chartData),
-                            const SizedBox(height: 24),
-                            _buildSisaKeuangan(income, expense, sisa),
-                          ],
-                        )
-                      : Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 2, child: _buildChartArea(chartData)),
-                            const SizedBox(width: 24),
-                            Expanded(flex: 1, child: _buildSisaKeuangan(income, expense, sisa)),
-                          ],
-                        ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildRincianTransaksi(snapshot),
+                ],
               ),
-              const SizedBox(height: 24),
-              _buildRincianTransaksi(snapshot),
-            ],
-          ),
+            );
+          },
         );
-      }
+      },
     );
   }
 
@@ -338,8 +369,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
     );
   }
 
-  Widget _buildSisaKeuangan(double income, double expense, double sisa) {
-    double progress = income > 0 ? (sisa / income).clamp(0, 1) : 0;
+  Widget _buildSisaKeuangan(double income, double expense, double sisa, double totalSavings) {
+    double monthlySisa = income - expense;
+    double progress = income > 0 ? (monthlySisa / income).clamp(0, 1) : 0;
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     
     return Container(
@@ -355,15 +387,15 @@ class _LaporanScreenState extends State<LaporanScreen> {
           const SizedBox(height: 16),
           Text(currencyFormatter.format(sisa), style: TextStyle(color: sisa >= 0 ? const Color(0xFF10B981) : Colors.redAccent, fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('Tersisa ${(progress * 100).toStringAsFixed(0)}% dari pemasukan', style: TextStyle(color: theme.textMuted, fontSize: 10)),
+          Text('Tersisa ${(progress * 100).toStringAsFixed(0)}% dari pemasukan bulan ini', style: TextStyle(color: theme.textMuted, fontSize: 10)),
           const SizedBox(height: 16),
-          LinearProgressIndicator(value: progress, backgroundColor: theme.border, color: sisa >= 0 ? const Color(0xFF10B981) : Colors.redAccent, minHeight: 4),
+          LinearProgressIndicator(value: progress, backgroundColor: theme.border, color: monthlySisa >= 0 ? const Color(0xFF10B981) : Colors.redAccent, minHeight: 4),
           const SizedBox(height: 24),
           _reportRow(Icons.arrow_upward, 'Pemasukan', currencyFormatter.format(income), Colors.blue),
           const SizedBox(height: 12),
           _reportRow(Icons.arrow_downward, 'Pengeluaran', currencyFormatter.format(expense), Colors.red),
           const SizedBox(height: 12),
-          _reportRow(Icons.account_balance_wallet, 'Total Tabungan', 'Rp 0', Colors.indigo),
+          _reportRow(Icons.account_balance_wallet, 'Total Tabungan', currencyFormatter.format(totalSavings), Colors.indigo),
         ],
       ),
     );

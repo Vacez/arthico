@@ -144,6 +144,95 @@ class _GoalsScreenState extends State<GoalsScreen> {
     );
   }
 
+  void _showEditGoalDialog(String goalId, String currentTitle, double currentTarget) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final titleController = TextEditingController(text: currentTitle);
+    final amountController = TextEditingController(text: currentTarget.toStringAsFixed(0));
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: theme.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Edit Goal', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              style: TextStyle(color: theme.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Nama Goal',
+                labelStyle: TextStyle(color: theme.textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              style: TextStyle(color: theme.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Target Nominal (Rp)',
+                labelStyle: TextStyle(color: theme.textSecondary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Batal', style: TextStyle(color: theme.textSecondary))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.accent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              if (titleController.text.isNotEmpty && amountController.text.isNotEmpty) {
+                await _dbService.updateGoal(
+                  goalId: goalId,
+                  title: titleController.text,
+                  targetAmount: double.parse(amountController.text),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmDialog(String goalId, String title) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: theme.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Hapus Goal', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('Apakah Anda yakin ingin menghapus goal "$title"?', style: TextStyle(color: theme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Batal', style: TextStyle(color: theme.textSecondary))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              await _dbService.deleteGoal(goalId);
+              Navigator.pop(context);
+            },
+            child: const Text('Hapus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     bool isMobile = MediaQuery.of(context).size.width < 600;
@@ -252,18 +341,37 @@ class _GoalsScreenState extends State<GoalsScreen> {
                                     ],
                                   ),
                                 ),
-                                Container(
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
-                                  ),
-                                  child: TextButton.icon(
-                                    onPressed: () => _showNabungDialog(doc.id, title),
-                                    icon: const Icon(Icons.add, size: 16, color: Color(0xFF10B981)),
-                                    label: const Text('Nabung', style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold)),
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _showEditGoalDialog(doc.id, title, target),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _showDeleteConfirmDialog(doc.id, title),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Container(
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                                      ),
+                                      child: TextButton.icon(
+                                        onPressed: () => _showNabungDialog(doc.id, title),
+                                        icon: const Icon(Icons.add, size: 16, color: Color(0xFF10B981)),
+                                        label: const Text('Nabung', style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

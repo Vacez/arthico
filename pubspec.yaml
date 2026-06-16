@@ -24,5 +24,18 @@ dependencies:
   provider: ^6.1.0
   share_plus: ^13.1.0
 
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo.jpg"
+  remove_alpha_ios: true
+
 flutter:
   uses-material-design: true
+  assets:
+    - assets/logo.jpg
