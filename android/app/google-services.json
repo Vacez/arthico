@@ -12,7 +12,20 @@
           "package_name": "com.example.arthico_app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "282440775443-s9fs3hu9028v0tulb5322avot4jkom81.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.arthico_app",
+            "certificate_hash": "db4ce7ffbc7161ee3b9846d4b86c73bb0b817467"
+          }
+        },
+        {
+          "client_id": "282440775443-usv2vdt2cee99v0h0i325a2c9bmgj5u9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDrA70gxz5cpv-Hs65XYXQta22dVg4jIQ4"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "282440775443-usv2vdt2cee99v0h0i325a2c9bmgj5u9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "282440775443-22fdcqlv22a5p3tnm0ud05oghttfev4q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.arthicoApp"
+              }
+            }
+          ]
         }
       }
     }
