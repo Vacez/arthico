@@ -83,9 +83,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
               // Aggregate data based on selected period
               if (_isWeekly) {
-                // Weekly aggregation within the selected month
-                Map<int, double> weeklyIncome = {};
-                Map<int, double> weeklyExpense = {};
+                // Weekly aggregation within the selected month (initialize 5 weeks)
+                Map<int, double> weeklyIncome = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+                Map<int, double> weeklyExpense = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
                 for (var doc in snapshot.data!.docs) {
                   final data = doc.data() as Map<String, dynamic>;
                   final timestamp = data['timestamp'] as Timestamp?;
@@ -93,6 +93,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   DateTime date = timestamp.toDate();
                   if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
                     int weekOfMonth = ((date.day - 1) ~/ 7) + 1; // 1-5
+                    if (weekOfMonth > 5) weekOfMonth = 5;
                     double amt = (data['amount'] ?? 0).toDouble();
                     if (data['type'] == 'Pemasukan') {
                       weeklyIncome[weekOfMonth] = (weeklyIncome[weekOfMonth] ?? 0) + amt;
@@ -101,15 +102,26 @@ class _LaporanScreenState extends State<LaporanScreen> {
                     }
                   }
                 }
-                // Build chart data for each week
-                chartData = weeklyIncome.keys.map((week) {
+                // Build chart data for each week sequentially (x goes from 1 to 5)
+                List<int> sortedWeeks = [1, 2, 3, 4, 5];
+                chartData = sortedWeeks.map((week) {
                   double inc = weeklyIncome[week] ?? 0;
                   double exp = weeklyExpense[week] ?? 0;
                   return BarChartGroupData(
                     x: week,
                     barRods: [
-                      BarChartRodData(toY: inc, color: Colors.blue, width: 12),
-                      BarChartRodData(toY: exp, color: Colors.red, width: 12),
+                      BarChartRodData(
+                        toY: inc, 
+                        color: Colors.blue, 
+                        width: 8,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      ),
+                      BarChartRodData(
+                        toY: exp, 
+                        color: Colors.red, 
+                        width: 8,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      ),
                     ],
                   );
                 }).toList();
@@ -328,27 +340,46 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 ? Center(child: Icon(Icons.show_chart, color: theme.textMuted, size: 100))
                 : BarChart(
                     BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
                       barGroups: chartData,
                       borderData: FlBorderData(show: false),
                       titlesData: FlTitlesData(
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
                             getTitlesWidget: (double value, TitleMeta meta) {
-                              switch (value.toInt()) {
-                                case 0:
-                                  return Text('Pemasukan', style: TextStyle(color: theme.textSecondary, fontSize: 10));
-                                case 1:
-                                  return Text('Pengeluaran', style: TextStyle(color: theme.textSecondary, fontSize: 10));
-                                default:
-                                  return const SizedBox.shrink();
+                              if (_isWeekly) {
+                                int week = value.toInt();
+                                if (week >= 1 && week <= 5) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Text('Mgg $week', style: TextStyle(color: theme.textSecondary, fontSize: 9)),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              } else {
+                                switch (value.toInt()) {
+                                  case 0:
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 8.0),
+                                      child: Text('Pemasukan', style: TextStyle(color: theme.textSecondary, fontSize: 9, fontWeight: FontWeight.bold)),
+                                    );
+                                  case 1:
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 8.0),
+                                      child: Text('Pengeluaran', style: TextStyle(color: theme.textSecondary, fontSize: 9, fontWeight: FontWeight.bold)),
+                                    );
+                                  default:
+                                    return const SizedBox.shrink();
+                                }
                               }
                             },
                           ),
                         ),
-                        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                       ),
-                      groupsSpace: 30,
                     ),
                   ),
             ),

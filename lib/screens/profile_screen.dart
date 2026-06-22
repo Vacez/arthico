@@ -375,8 +375,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 24),
           _switchRow(
-            'Notifikasi Email', 
-            'Dapatkan update aktivitas keuangan via email', 
+            'Notifikasi Aplikasi', 
+            'Dapatkan update aktivitas keuangan langsung di handphone', 
             emailNotif,
             (val) => _dbService.updateUserPreference('emailNotifications', val),
           ),

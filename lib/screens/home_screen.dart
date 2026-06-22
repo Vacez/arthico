@@ -1134,7 +1134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             sideTitles: SideTitles(
                               showTitles: true,
                               getTitlesWidget: (val, meta) {
-                                if (val.toInt() >= labels.length) return const SizedBox();
+                                if (val.toInt() < 0 || val.toInt() >= labels.length) return const SizedBox();
                                 return Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Text(labels[val.toInt()], style: TextStyle(color: theme.textMuted, fontSize: 9)),

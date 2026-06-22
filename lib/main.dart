@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     return MaterialApp(
-      title: 'Arthico App',
+      title: 'Arthico',
       debugShowCheckedModeBanner: false,
       theme: ThemeProvider.lightTheme,
       darkTheme: ThemeProvider.darkTheme,

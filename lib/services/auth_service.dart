@@ -124,14 +124,18 @@ class AuthService {
       return {'user': result.user, 'error': null};
     } on FirebaseAuthException catch (e) {
       String message = 'Gagal login';
-      if (e.code == 'user-not-found') {
-        message = 'Pengguna tidak ditemukan';
-      } else if (e.code == 'wrong-password') {
-        message = 'Password salah';
+      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        message = 'Email atau password salah';
+      } else if (e.code == 'invalid-email') {
+        message = 'Format email tidak valid';
+      } else if (e.code == 'user-disabled') {
+        message = 'Akun ini telah dinonaktifkan';
       } else if (e.code == 'operation-not-allowed') {
-        message = 'Fitur login belum diaktifkan di Console';
+        message = 'Fitur login dengan email belum diaktifkan di Firebase Console';
+      } else {
+        message = '$message (${e.message ?? e.code})';
       }
-      return {'user': null, 'error': message + ' (${e.code})'};
+      return {'user': null, 'error': message};
     } catch (e) {
       return {'user': null, 'error': e.toString()};
     }
