@@ -720,7 +720,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   pw.Text('LAPORAN NERACA KEUANGAN', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
                   pw.SizedBox(height: 4),
                   pw.Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  pw.Text('Nama: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text('Saudara/i: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
                   pw.Text('(dalam Rupiah)', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
                 ],
               ),
@@ -878,7 +878,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 children: [
                   pw.Text('LAPORAN LABA RUGI', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
                   pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
-                  pw.Text('Nama: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text('Saudara/i: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
                 ],
               ),
             ),
@@ -972,7 +972,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 children: [
                   pw.Text('BUKU BESAR KEUANGAN', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
                   pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
-                  pw.Text('Nama: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text('Saudara/i: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
                 ],
               ),
             ),
@@ -1081,7 +1081,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   pw.Text('LAPORAN ARUS KAS', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
                   pw.SizedBox(height: 4),
                   pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  pw.Text('Nama: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text('Saudara/i: $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
                 ],
               ),
             ),
@@ -1172,7 +1172,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
             ),
             pw.SizedBox(height: 10),
             pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 14)),
-            pw.Text('Nama: $userName', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
+            pw.Text('Saudara/i: $userName', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
             pw.SizedBox(height: 20),
             if (transactionsData.isEmpty)
               pw.Text('Tidak ada transaksi pada periode ini.', style: const pw.TextStyle(fontSize: 12))
@@ -1259,7 +1259,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       double netWorth = totalAssets - totalLiabilities;
 
       sheet.appendRow(["LAPORAN NERACA KEUANGAN"]);
-      sheet.appendRow(["Nama:", userName]);
+      sheet.appendRow(["Saudara/i:", userName]);
       sheet.appendRow(["Per:", DateFormat('dd MMMM yyyy').format(_selectedDate)]);
       sheet.appendRow([]);
       sheet.appendRow(["ASET", "NILAI", "KEWAJIBAN & EKUITAS", "NILAI"]);
@@ -1316,7 +1316,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       }
 
       sheet.appendRow(["LAPORAN LABA RUGI"]);
-      sheet.appendRow(["Nama:", userName]);
+      sheet.appendRow(["Saudara/i:", userName]);
       sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
       sheet.appendRow([]);
       sheet.appendRow(["PENDAPATAN", "JUMLAH"]);
@@ -1359,7 +1359,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       }
 
       sheet.appendRow(["LAPORAN BUKU BESAR KEUANGAN"]);
-      sheet.appendRow(["Nama:", userName]);
+      sheet.appendRow(["Saudara/i:", userName]);
       sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
       sheet.appendRow([]);
 
@@ -1425,7 +1425,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       double saldoAwal = saldoAkhir - netFlow;
 
       sheet.appendRow(["LAPORAN ARUS KAS"]);
-      sheet.appendRow(["Nama:", userName]);
+      sheet.appendRow(["Saudara/i:", userName]);
       sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
       sheet.appendRow([]);
       sheet.appendRow(["Aktivitas Aliran Kas", "Nominal (Rp)"]);
@@ -1454,7 +1454,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       // EXCEL: RINGKASAN (DEFAULT)
       // ----------------------------------------------------
       sheet.appendRow(["LAPORAN KEUANGAN RINGKASAN"]);
-      sheet.appendRow(["Nama:", userName]);
+      sheet.appendRow(["Saudara/i:", userName]);
       sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
       sheet.appendRow([]);
       sheet.appendRow(["Tanggal", "Kategori", "Keterangan", "Tipe", "Jumlah"]);
