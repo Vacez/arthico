@@ -525,80 +525,458 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
   Future<void> _exportPdf() async {
     final pdf = pw.Document();
+    final String uid = _dbService.uid;
     
-    // Fetch transactions
-    final snapshot = await _dbService.getAllTransactionsOnce();
-    List<List<String>> transactionsData = [];
-    
-    if (snapshot.docs.isNotEmpty) {
-      // Sort transactions oldest to newest
-      final docs = List<QueryDocumentSnapshot>.from(snapshot.docs);
-      docs.sort((a, b) {
-        final tsA = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-        final tsB = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-        if (tsA == null || tsB == null) return 0;
-        return tsA.compareTo(tsB);
-      });
+    // Fetch data
+    final goalsSnapshot = await FirebaseFirestore.instance.collection('users').doc(uid).collection('goals').get();
+    final fixedExpensesSnapshot = await FirebaseFirestore.instance.collection('users').doc(uid).collection('fixed_expenses').get();
+    final transactionsSnapshot = await _dbService.getAllTransactionsOnce();
 
-      for (var doc in docs) {
+    String formatCurrencyPdf(double val) {
+      return 'Rp ' + NumberFormat.decimalPattern('id').format(val.toInt());
+    }
+
+    if (_selectedReportType == 'Neraca') {
+      // ----------------------------------------------------
+      // NERACA PDF
+      // ----------------------------------------------------
+      double cashBalance = 0;
+      for (var doc in transactionsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final timestamp = data['timestamp'] as Timestamp?;
         if (timestamp == null) continue;
         DateTime date = timestamp.toDate();
-        
-        // Filter by period (same month and year)
-        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-          final isIncome = data['type'] == 'Pemasukan';
-          final category = _sanitizeForPdf(data['category'] ?? '-');
-          final note = _sanitizeForPdf(data['note'] ?? '');
-          final type = data['type'] ?? '-';
-          final amountFormatted = (isIncome ? '' : '-') + currencyFormatter.format(data['amount'] ?? 0);
-          
-          transactionsData.add([
-            DateFormat('dd/MM/yyyy').format(date),
-            category,
-            note,
-            type,
-            amountFormatted,
-          ]);
+        double amt = (data['amount'] ?? 0).toDouble();
+        bool isIncome = data['type'] == 'Pemasukan';
+        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+          if (isIncome) cashBalance += amt; else cashBalance -= amt;
         }
       }
-    }
+      
+      double totalGoalsAmount = goalsSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['currentAmount'] ?? 0) as num).toDouble());
+      double shortTermLiabilities = fixedExpensesSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
+      
+      double personalHouse = 500000000;
+      double personalCar = 120000000;
+      double carLoan = 80000000;
+      double mortgage = 350000000;
+      
+      double totalLiquid = cashBalance;
+      double totalInvest = totalGoalsAmount;
+      double totalPersonal = personalHouse + personalCar;
+      double totalAssets = totalLiquid + totalInvest + totalPersonal;
+      
+      double totalShort = shortTermLiabilities + 5000000;
+      double totalLong = carLoan + mortgage;
+      double totalLiabilities = totalShort + totalLong;
+      double netWorth = totalAssets - totalLiabilities;
 
-    pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      build: (pw.Context context) {
-        return [
-          pw.Header(
-            level: 0,
-            child: pw.Text('Laporan Keuangan', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 14)),
-          pw.SizedBox(height: 20),
-          if (transactionsData.isEmpty)
-            pw.Text('Tidak ada transaksi pada periode ini.', style: const pw.TextStyle(fontSize: 12))
-          else
+      pdf.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Text('LAPORAN NERACA KEUANGAN', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
+                  pw.Text('(dalam Rupiah)', style: pw.TextStyle(fontSize: 10, fontStyle: pw.FontStyle.italic)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+            
             pw.TableHelper.fromTextArray(
-              headers: ['Tanggal', 'Kategori', 'Keterangan', 'Tipe', 'Jumlah'],
-              data: transactionsData,
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              headers: ['Keterangan Aset', 'Nilai (Rp)', 'Keterangan Kewajiban & Ekuitas', 'Nilai (Rp)'],
+              data: [
+                ['ASET LANCAR / KAS', '', 'KEWAJIBAN JANGKA PENDEK', ''],
+                ['  Kas Utama / Saldo Dompet', formatCurrencyPdf(cashBalance), '  List Kebutuhan Bulanan', formatCurrencyPdf(shortTermLiabilities)],
+                ['', '', '  Kartu Kredit (Mock)', formatCurrencyPdf(5000000)],
+                ['Total Kas & Setara Kas', formatCurrencyPdf(totalLiquid), 'Total Kewajiban Jk. Pendek', formatCurrencyPdf(totalShort)],
+                ['', '', '', ''],
+                ['ASET INVESTASI', '', 'KEWAJIBAN JANGKA PANJANG', ''],
+                ...goalsSnapshot.docs.map((doc) => [
+                  '  Tabungan: ${doc.data()['title']}', 
+                  formatCurrencyPdf(((doc.data()['currentAmount'] ?? 0) as num).toDouble()), 
+                  '', 
+                  ''
+                ]),
+                ['Total Aset Investasi', formatCurrencyPdf(totalInvest), '  Kredit Mobil (Mock)', formatCurrencyPdf(carLoan)],
+                ['', '', '  Pinjaman Hipotek (Mock)', formatCurrencyPdf(mortgage)],
+                ['', '', 'Total Kewajiban Jk. Panjang', formatCurrencyPdf(totalLong)],
+                ['', '', 'TOTAL KEWAJIBAN', formatCurrencyPdf(totalLiabilities)],
+                ['ASET PENGGUNAAN PRIBADI', '', '', ''],
+                ['  Rumah Pribadi', formatCurrencyPdf(personalHouse), 'KEKAYAAN BERSIH', ''],
+                ['  Kendaraan / Mobil', formatCurrencyPdf(personalCar), '  Nilai Kekayaan Bersih (Ekuitas)', formatCurrencyPdf(netWorth)],
+                ['Total Aset Pribadi', formatCurrencyPdf(totalPersonal), '', ''],
+                ['', '', '', ''],
+                ['TOTAL ASET', formatCurrencyPdf(totalAssets), 'TOTAL KEWAJIBAN & EKUITAS', formatCurrencyPdf(totalAssets)],
+              ],
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              cellStyle: const pw.TextStyle(fontSize: 8),
               headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
               cellAlignment: pw.Alignment.centerLeft,
               cellAlignments: {
-                4: pw.Alignment.centerRight, // Align amount column to right
+                1: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
               },
             ),
-        ];
-      },
-    ));
+          ];
+        },
+      ));
 
-    // Conditional handling for web vs mobile/desktop
-    if (kIsWeb) {
-      // On web, sharePdf triggers a download dialog
-      await Printing.sharePdf(bytes: await pdf.save(), filename: 'laporan.pdf');
+    } else if (_selectedReportType == 'Laba Rugi') {
+      // ----------------------------------------------------
+      // LABA RUGI PDF
+      // ----------------------------------------------------
+      Map<String, double> incomeByCat = {};
+      Map<String, double> expenseByCat = {};
+      double totalIncome = 0;
+      double totalExpense = 0;
+
+      for (var doc in transactionsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] as Timestamp?;
+        if (timestamp == null) continue;
+        DateTime date = timestamp.toDate();
+
+        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          double amt = (data['amount'] ?? 0).toDouble();
+          String type = data['type'] ?? '';
+          String cat = _sanitizeForPdf(data['category'] ?? 'Lainnya');
+
+          if (type == 'Pemasukan') {
+            incomeByCat[cat] = (incomeByCat[cat] ?? 0) + amt;
+            totalIncome += amt;
+          } else {
+            expenseByCat[cat] = (expenseByCat[cat] ?? 0) + amt;
+            totalExpense += amt;
+          }
+        }
+      }
+
+      double netProfit = totalIncome - totalExpense;
+
+      pdf.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Text('LAPORAN LABA RUGI', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+            
+            pw.Text('PENDAPATAN', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.blue)),
+            pw.SizedBox(height: 8),
+            pw.TableHelper.fromTextArray(
+              headers: ['Kategori Pendapatan', 'Jumlah (Rp)'],
+              data: [
+                ...incomeByCat.entries.map((e) => [e.key, formatCurrencyPdf(e.value)]),
+                ['Total Pendapatan', formatCurrencyPdf(totalIncome)],
+              ],
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+              cellAlignments: {1: pw.Alignment.centerRight},
+            ),
+            pw.SizedBox(height: 20),
+
+            pw.Text('PENGELUARAN / BEBAN', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.red)),
+            pw.SizedBox(height: 8),
+            pw.TableHelper.fromTextArray(
+              headers: ['Kategori Pengeluaran', 'Jumlah (Rp)'],
+              data: [
+                ...expenseByCat.entries.map((e) => [e.key, formatCurrencyPdf(e.value)]),
+                ['Total Pengeluaran', formatCurrencyPdf(totalExpense)],
+              ],
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+              cellAlignments: {1: pw.Alignment.centerRight},
+            ),
+            pw.SizedBox(height: 25),
+
+            pw.Container(
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.black, width: 1),
+                color: netProfit >= 0 ? PdfColors.green100 : PdfColors.red100,
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(netProfit >= 0 ? 'LABA BERSIH' : 'RUGI BERSIH', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                  pw.Text(formatCurrencyPdf(netProfit), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                ],
+              ),
+            ),
+          ];
+        },
+      ));
+
+    } else if (_selectedReportType == 'Buku Besar') {
+      // ----------------------------------------------------
+      // BUKU BESAR PDF
+      // ----------------------------------------------------
+      Map<String, List<Map<String, dynamic>>> transactionsByCat = {};
+      for (var doc in transactionsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] as Timestamp?;
+        if (timestamp == null) continue;
+        DateTime date = timestamp.toDate();
+
+        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          String cat = _sanitizeForPdf(data['category'] ?? 'Lainnya');
+          if (!transactionsByCat.containsKey(cat)) {
+            transactionsByCat[cat] = [];
+          }
+          transactionsByCat[cat]!.add({
+            'date': date,
+            'type': data['type'],
+            'amount': (data['amount'] ?? 0).toDouble(),
+            'note': _sanitizeForPdf(data['note'] ?? ''),
+          });
+        }
+      }
+
+      transactionsByCat.forEach((key, list) {
+        list.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+      });
+
+      pdf.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Text('BUKU BESAR KEUANGAN', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+
+            if (transactionsByCat.isEmpty)
+              pw.Text('Tidak ada transaksi pada periode ini.', style: const pw.TextStyle(fontSize: 12))
+            else
+              ...transactionsByCat.entries.map((entry) {
+                String cat = entry.key;
+                var txList = entry.value;
+
+                double totalDebet = txList.where((tx) => tx['type'] == 'Pemasukan').fold(0, (sum, tx) => sum + (tx['amount'] as double));
+                double totalKredit = txList.where((tx) => tx['type'] == 'Pengeluaran').fold(0, (sum, tx) => sum + (tx['amount'] as double));
+
+                return pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Kategori: $cat (Debet: ${formatCurrencyPdf(totalDebet)} | Kredit: ${formatCurrencyPdf(totalKredit)})', 
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.indigo)),
+                    pw.SizedBox(height: 5),
+                    pw.TableHelper.fromTextArray(
+                      headers: ['Tanggal', 'Keterangan', 'Debet (+)', 'Kredit (-)'],
+                      data: txList.map((tx) {
+                        bool isIncome = tx['type'] == 'Pemasukan';
+                        double amount = tx['amount'] as double;
+                        return [
+                          DateFormat('dd/MM/yyyy').format(tx['date'] as DateTime),
+                          tx['note'] as String,
+                          isIncome ? formatCurrencyPdf(amount) : '-',
+                          !isIncome ? formatCurrencyPdf(amount) : '-',
+                        ];
+                      }).toList(),
+                      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+                      cellStyle: const pw.TextStyle(fontSize: 7),
+                      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                      cellAlignments: {
+                        2: pw.Alignment.centerRight,
+                        3: pw.Alignment.centerRight,
+                      },
+                    ),
+                    pw.SizedBox(height: 15),
+                  ],
+                );
+              }),
+          ];
+        },
+      ));
+
+    } else if (_selectedReportType == 'Arus Kas') {
+      // ----------------------------------------------------
+      // ARUS KAS PDF
+      // ----------------------------------------------------
+      double flowOperasiIn = 0;
+      double flowOperasiOut = 0;
+      double flowInvestasiIn = 0;
+      double flowInvestasiOut = 0;
+      double flowPendanaanIn = 0;
+      double flowPendanaanOut = 0;
+      double cumulativeBalance = 0;
+
+      for (var doc in transactionsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] as Timestamp?;
+        if (timestamp == null) continue;
+        DateTime date = timestamp.toDate();
+
+        double amt = (data['amount'] ?? 0).toDouble();
+        bool isIncome = data['type'] == 'Pemasukan';
+
+        // Cumulative balance up to selected month end
+        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+          if (isIncome) cumulativeBalance += amt; else cumulativeBalance -= amt;
+        }
+
+        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          String cat = data['category'] ?? 'Lainnya';
+
+          if (cat == 'Tabungan' || cat == 'Investasi' || cat == 'Emas' || cat == 'Saham' || cat == 'Goals') {
+            if (isIncome) flowInvestasiIn += amt; else flowInvestasiOut += amt;
+          } else if (cat == 'Hutang' || cat == 'Pinjaman' || cat == 'Modal' || cat == 'Cicilan' || cat == 'Kredit') {
+            if (isIncome) flowPendanaanIn += amt; else flowPendanaanOut += amt;
+          } else {
+            if (isIncome) flowOperasiIn += amt; else flowOperasiOut += amt;
+          }
+        }
+      }
+
+      double netOperasi = flowOperasiIn - flowOperasiOut;
+      double netInvestasi = flowInvestasiIn - flowInvestasiOut;
+      double netPendanaan = flowPendanaanIn - flowPendanaanOut;
+      double netFlow = netOperasi + netInvestasi + netPendanaan;
+      double saldoAkhir = cumulativeBalance;
+      double saldoAwal = saldoAkhir - netFlow;
+
+      pdf.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Text('LAPORAN ARUS KAS', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+
+            pw.TableHelper.fromTextArray(
+              headers: ['Aktivitas Aliran Kas', 'Nominal (Rp)'],
+              data: [
+                ['SALDO AWAL KAS', formatCurrencyPdf(saldoAwal)],
+                ['', ''],
+                ['A. Arus Kas Dari Aktivitas Operasi', ''],
+                ['  Penerimaan Kas (Pendapatan)', formatCurrencyPdf(flowOperasiIn)],
+                ['  Pengeluaran Kas (Beban Operasional)', formatCurrencyPdf(-flowOperasiOut)],
+                ['Jumlah Kas Bersih dari Aktivitas Operasi', formatCurrencyPdf(netOperasi)],
+                ['', ''],
+                ['B. Arus Kas Dari Aktivitas Investasi', ''],
+                ['  Penerimaan Investasi/Tabungan', formatCurrencyPdf(flowInvestasiIn)],
+                ['  Penempatan Investasi/Tabungan', formatCurrencyPdf(-flowInvestasiOut)],
+                ['Jumlah Kas Bersih dari Aktivitas Investasi', formatCurrencyPdf(netInvestasi)],
+                ['', ''],
+                ['C. Arus Kas Dari Aktivitas Pendanaan', ''],
+                ['  Penerimaan Pinjaman/Modal', formatCurrencyPdf(flowPendanaanIn)],
+                ['  Pelunasan Pinjaman/Hutang/Cicilan', formatCurrencyPdf(-flowPendanaanOut)],
+                ['Jumlah Kas Bersih dari Aktivitas Pendanaan', formatCurrencyPdf(netPendanaan)],
+                ['', ''],
+                ['KENAIKAN / (PENURUNAN) KAS BERSIH', formatCurrencyPdf(netFlow)],
+                ['SALDO AKHIR KAS', formatCurrencyPdf(saldoAkhir)],
+              ],
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+              cellAlignments: {1: pw.Alignment.centerRight},
+            ),
+          ];
+        },
+      ));
+
     } else {
-      // On mobile/desktop, open print preview
+      // ----------------------------------------------------
+      // RINGKASAN PDF (DEFAULT)
+      // ----------------------------------------------------
+      List<List<String>> transactionsData = [];
+      if (transactionsSnapshot.docs.isNotEmpty) {
+        final docs = List<QueryDocumentSnapshot>.from(transactionsSnapshot.docs);
+        docs.sort((a, b) {
+          final tsA = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+          final tsB = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+          if (tsA == null || tsB == null) return 0;
+          return tsA.compareTo(tsB);
+        });
+
+        for (var doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final timestamp = data['timestamp'] as Timestamp?;
+          if (timestamp == null) continue;
+          DateTime date = timestamp.toDate();
+          
+          if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+            final isIncome = data['type'] == 'Pemasukan';
+            final category = _sanitizeForPdf(data['category'] ?? '-');
+            final note = _sanitizeForPdf(data['note'] ?? '');
+            final type = data['type'] ?? '-';
+            final amountFormatted = (isIncome ? '' : '-') + currencyFormatter.format(data['amount'] ?? 0);
+            
+            transactionsData.add([
+              DateFormat('dd/MM/yyyy').format(date),
+              category,
+              note,
+              type,
+              amountFormatted,
+            ]);
+          }
+        }
+      }
+
+      pdf.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Text('Laporan Keuangan', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 14)),
+            pw.SizedBox(height: 20),
+            if (transactionsData.isEmpty)
+              pw.Text('Tidak ada transaksi pada periode ini.', style: const pw.TextStyle(fontSize: 12))
+            else
+              pw.TableHelper.fromTextArray(
+                headers: ['Tanggal', 'Kategori', 'Keterangan', 'Tipe', 'Jumlah'],
+                data: transactionsData,
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                cellAlignment: pw.Alignment.centerLeft,
+                cellAlignments: {
+                  4: pw.Alignment.centerRight,
+                },
+              ),
+          ];
+        },
+      ));
+    }
+
+    // Save and layout PDF
+    if (kIsWeb) {
+      await Printing.sharePdf(bytes: await pdf.save(), filename: 'laporan_${_selectedReportType.toLowerCase()}.pdf');
+    } else {
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
       );
@@ -608,48 +986,272 @@ class _LaporanScreenState extends State<LaporanScreen> {
   Future<void> _exportExcel() async {
     var excel = Excel.createExcel();
     Sheet sheet = excel["Sheet1"];
-    // Header row
-    sheet.appendRow(["Tanggal", "Kategori", "Keterangan", "Tipe", "Jumlah"]);
-    // Fetch transactions
-    final snapshot = await _dbService.getAllTransactionsOnce();
-    if (snapshot.docs.isNotEmpty) {
-      // Sort transactions oldest to newest
-      final docs = List<QueryDocumentSnapshot>.from(snapshot.docs);
-      docs.sort((a, b) {
-        final tsA = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-        final tsB = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-        if (tsA == null || tsB == null) return 0;
-        return tsA.compareTo(tsB);
-      });
+    
+    final String uid = _dbService.uid;
+    final goalsSnapshot = await FirebaseFirestore.instance.collection('users').doc(uid).collection('goals').get();
+    final fixedExpensesSnapshot = await FirebaseFirestore.instance.collection('users').doc(uid).collection('fixed_expenses').get();
+    final transactionsSnapshot = await _dbService.getAllTransactionsOnce();
 
-      for (var doc in docs) {
+    if (_selectedReportType == 'Neraca') {
+      // ----------------------------------------------------
+      // EXCEL: NERACA
+      // ----------------------------------------------------
+      double cashBalance = 0;
+      for (var doc in transactionsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final timestamp = data['timestamp'] as Timestamp?;
         if (timestamp == null) continue;
         DateTime date = timestamp.toDate();
-        // Filter by period
+        double amt = (data['amount'] ?? 0).toDouble();
+        bool isIncome = data['type'] == 'Pemasukan';
+        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+          if (isIncome) cashBalance += amt; else cashBalance -= amt;
+        }
+      }
+
+      double totalGoalsAmount = goalsSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['currentAmount'] ?? 0) as num).toDouble());
+      double shortTermLiabilities = fixedExpensesSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
+
+      double personalHouse = 500000000;
+      double personalCar = 120000000;
+      double carLoan = 80000000;
+      double mortgage = 350000000;
+
+      double totalAssets = cashBalance + totalGoalsAmount + personalHouse + personalCar;
+      double totalLiabilities = shortTermLiabilities + 5000000 + carLoan + mortgage;
+      double netWorth = totalAssets - totalLiabilities;
+
+      sheet.appendRow(["LAPORAN NERACA KEUANGAN"]);
+      sheet.appendRow(["Per:", DateFormat('dd MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow([]);
+      sheet.appendRow(["ASET", "NILAI", "KEWAJIBAN & EKUITAS", "NILAI"]);
+      
+      sheet.appendRow(["Kas / Setara Kas", "", "Kewajiban Jangka Pendek", ""]);
+      sheet.appendRow(["  Kas Utama / Saldo Dompet", cashBalance, "  List Kebutuhan Bulanan", shortTermLiabilities]);
+      sheet.appendRow(["", "", "  Kartu Kredit (Mock)", 5000000]);
+      sheet.appendRow(["Total Kas & Setara Kas", cashBalance, "Total Kewajiban Jk. Pendek", shortTermLiabilities + 5000000]);
+      sheet.appendRow([]);
+      sheet.appendRow(["Aset Investasi", "", "Kewajiban Jangka Panjang", ""]);
+      
+      for (var doc in goalsSnapshot.docs) {
+        sheet.appendRow(["  Tabungan: ${doc.data()['title']}", doc.data()['currentAmount'] ?? 0, "", ""]);
+      }
+      
+      sheet.appendRow(["Total Aset Investasi", totalGoalsAmount, "  Kredit Mobil (Mock)", carLoan]);
+      sheet.appendRow(["", "", "  Pinjaman Hipotek (Mock)", mortgage]);
+      sheet.appendRow(["", "", "Total Kewajiban Jk. Panjang", carLoan + mortgage]);
+      sheet.appendRow(["Aset Penggunaan Pribadi", "", "TOTAL KEWAJIBAN", totalLiabilities]);
+      sheet.appendRow(["  Rumah Pribadi", personalHouse, "KEKAYAAN BERSIH", ""]);
+      sheet.appendRow(["  Kendaraan / Mobil", personalCar, "  Nilai Kekayaan Bersih (Ekuitas)", netWorth]);
+      sheet.appendRow(["Total Aset Pribadi", personalHouse + personalCar, "", ""]);
+      sheet.appendRow([]);
+      sheet.appendRow(["TOTAL ASET", totalAssets, "TOTAL HUTANG & KEKAYAAN BERSIH", totalAssets]);
+
+    } else if (_selectedReportType == 'Laba Rugi') {
+      // ----------------------------------------------------
+      // EXCEL: LABA RUGI
+      // ----------------------------------------------------
+      Map<String, double> incomeByCat = {};
+      Map<String, double> expenseByCat = {};
+      double totalIncome = 0;
+      double totalExpense = 0;
+
+      for (var doc in transactionsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] as Timestamp?;
+        if (timestamp == null) continue;
+        DateTime date = timestamp.toDate();
+
         if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-          final isIncome = data['type'] == 'Pemasukan';
+          double amt = (data['amount'] ?? 0).toDouble();
+          String type = data['type'] ?? '';
+          String cat = data['category'] ?? 'Lainnya';
+
+          if (type == 'Pemasukan') {
+            incomeByCat[cat] = (incomeByCat[cat] ?? 0) + amt;
+            totalIncome += amt;
+          } else {
+            expenseByCat[cat] = (expenseByCat[cat] ?? 0) + amt;
+            totalExpense += amt;
+          }
+        }
+      }
+
+      sheet.appendRow(["LAPORAN LABA RUGI"]);
+      sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow([]);
+      sheet.appendRow(["PENDAPATAN", "JUMLAH"]);
+      incomeByCat.forEach((cat, amt) {
+        sheet.appendRow([cat, amt]);
+      });
+      sheet.appendRow(["Total Pendapatan", totalIncome]);
+      sheet.appendRow([]);
+      sheet.appendRow(["PENGELUARAN / BEBAN", "JUMLAH"]);
+      expenseByCat.forEach((cat, amt) {
+        sheet.appendRow([cat, amt]);
+      });
+      sheet.appendRow(["Total Pengeluaran", totalExpense]);
+      sheet.appendRow([]);
+      sheet.appendRow([totalIncome - totalExpense >= 0 ? "LABA BERSIH" : "RUGI BERSIH", totalIncome - totalExpense]);
+
+    } else if (_selectedReportType == 'Buku Besar') {
+      // ----------------------------------------------------
+      // EXCEL: BUKU BESAR
+      // ----------------------------------------------------
+      Map<String, List<Map<String, dynamic>>> transactionsByCat = {};
+      for (var doc in transactionsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] as Timestamp?;
+        if (timestamp == null) continue;
+        DateTime date = timestamp.toDate();
+
+        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          String cat = data['category'] ?? 'Lainnya';
+          if (!transactionsByCat.containsKey(cat)) {
+            transactionsByCat[cat] = [];
+          }
+          transactionsByCat[cat]!.add({
+            'date': date,
+            'type': data['type'],
+            'amount': (data['amount'] ?? 0).toDouble(),
+            'note': data['note'] ?? '',
+          });
+        }
+      }
+
+      sheet.appendRow(["LAPORAN BUKU BESAR KEUANGAN"]);
+      sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow([]);
+
+      transactionsByCat.forEach((cat, txList) {
+        txList.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+        sheet.appendRow(["Akun/Kategori:", cat]);
+        sheet.appendRow(["Tanggal", "Keterangan", "Debet (+)", "Kredit (-)"]);
+        for (var tx in txList) {
+          bool isIncome = tx['type'] == 'Pemasukan';
           sheet.appendRow([
-            DateFormat('dd/MM/yyyy').format(date),
-            data['category'] ?? '-',
-            data['note'] ?? '',
-            data['type'] ?? '-',
-            (isIncome ? '' : '-') + currencyFormatter.format(data['amount'] ?? 0),
+            DateFormat('dd/MM/yyyy').format(tx['date'] as DateTime),
+            tx['note'],
+            isIncome ? tx['amount'] : "-",
+            !isIncome ? tx['amount'] : "-",
           ]);
+        }
+        sheet.appendRow([]);
+      });
+
+    } else if (_selectedReportType == 'Arus Kas') {
+      // ----------------------------------------------------
+      // EXCEL: ARUS KAS
+      // ----------------------------------------------------
+      double flowOperasiIn = 0;
+      double flowOperasiOut = 0;
+      double flowInvestasiIn = 0;
+      double flowInvestasiOut = 0;
+      double flowPendanaanIn = 0;
+      double flowPendanaanOut = 0;
+      double cumulativeBalance = 0;
+
+      for (var doc in transactionsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] as Timestamp?;
+        if (timestamp == null) continue;
+        DateTime date = timestamp.toDate();
+
+        double amt = (data['amount'] ?? 0).toDouble();
+        bool isIncome = data['type'] == 'Pemasukan';
+
+        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+          if (isIncome) cumulativeBalance += amt; else cumulativeBalance -= amt;
+        }
+
+        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          String cat = data['category'] ?? 'Lainnya';
+
+          if (cat == 'Tabungan' || cat == 'Investasi' || cat == 'Emas' || cat == 'Saham' || cat == 'Goals') {
+            if (isIncome) flowInvestasiIn += amt; else flowInvestasiOut += amt;
+          } else if (cat == 'Hutang' || cat == 'Pinjaman' || cat == 'Modal' || cat == 'Cicilan' || cat == 'Kredit') {
+            if (isIncome) flowPendanaanIn += amt; else flowPendanaanOut += amt;
+          } else {
+            if (isIncome) flowOperasiIn += amt; else flowOperasiOut += amt;
+          }
+        }
+      }
+
+      double netOperasi = flowOperasiIn - flowOperasiOut;
+      double netInvestasi = flowInvestasiIn - flowInvestasiOut;
+      double netPendanaan = flowPendanaanIn - flowPendanaanOut;
+      double netFlow = netOperasi + netInvestasi + netPendanaan;
+      double saldoAkhir = cumulativeBalance;
+      double saldoAwal = saldoAkhir - netFlow;
+
+      sheet.appendRow(["LAPORAN ARUS KAS"]);
+      sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow([]);
+      sheet.appendRow(["Aktivitas Aliran Kas", "Nominal (Rp)"]);
+      sheet.appendRow(["SALDO AWAL KAS", saldoAwal]);
+      sheet.appendRow([]);
+      sheet.appendRow(["A. Arus Kas Dari Aktivitas Operasi", ""]);
+      sheet.appendRow(["  Penerimaan Kas (Pendapatan)", flowOperasiIn]);
+      sheet.appendRow(["  Pengeluaran Kas (Beban Operasional)", -flowOperasiOut]);
+      sheet.appendRow(["Jumlah Kas Bersih dari Aktivitas Operasi", netOperasi]);
+      sheet.appendRow([]);
+      sheet.appendRow(["B. Arus Kas Dari Aktivitas Investasi", ""]);
+      sheet.appendRow(["  Penerimaan Investasi/Tabungan", flowInvestasiIn]);
+      sheet.appendRow(["  Penempatan Investasi/Tabungan", -flowInvestasiOut]);
+      sheet.appendRow(["Jumlah Kas Bersih dari Aktivitas Investasi", netInvestasi]);
+      sheet.appendRow([]);
+      sheet.appendRow(["C. Arus Kas Dari Aktivitas Pendanaan", ""]);
+      sheet.appendRow(["  Penerimaan Pinjaman/Modal", flowPendanaanIn]);
+      sheet.appendRow(["  Pelunasan Pinjaman/Hutang/Cicilan", -flowPendanaanOut]);
+      sheet.appendRow(["Jumlah Kas Bersih dari Aktivitas Pendanaan", netPendanaan]);
+      sheet.appendRow([]);
+      sheet.appendRow(["KENAIKAN / (PENURUNAN) KAS BERSIH", netFlow]);
+      sheet.appendRow(["SALDO AKHIR KAS", saldoAkhir]);
+
+    } else {
+      // ----------------------------------------------------
+      // EXCEL: RINGKASAN (DEFAULT)
+      // ----------------------------------------------------
+      sheet.appendRow(["Tanggal", "Kategori", "Keterangan", "Tipe", "Jumlah"]);
+      if (transactionsSnapshot.docs.isNotEmpty) {
+        final docs = List<QueryDocumentSnapshot>.from(transactionsSnapshot.docs);
+        docs.sort((a, b) {
+          final tsA = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+          final tsB = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+          if (tsA == null || tsB == null) return 0;
+          return tsA.compareTo(tsB);
+        });
+
+        for (var doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final timestamp = data['timestamp'] as Timestamp?;
+          if (timestamp == null) continue;
+          DateTime date = timestamp.toDate();
+          if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+            final isIncome = data['type'] == 'Pemasukan';
+            sheet.appendRow([
+              DateFormat('dd/MM/yyyy').format(date),
+              data['category'] ?? '-',
+              data['note'] ?? '',
+              data['type'] ?? '-',
+              (isIncome ? '' : '-') + currencyFormatter.format(data['amount'] ?? 0),
+            ]);
+          }
         }
       }
     }
+
     final bytes = Uint8List.fromList(excel.encode()!);
+    final String filename = "laporan_${_selectedReportType.toLowerCase()}";
+    
     if (kIsWeb) {
-      // Use file_saver to trigger a download in the browser
-      await FileSaver.instance.saveFile(name: 'laporan', bytes: bytes, ext: 'xlsx');
+      await FileSaver.instance.saveFile(name: filename, bytes: bytes, ext: 'xlsx');
     } else {
       final output = await getTemporaryDirectory();
-      final filePath = "${output.path}/laporan.xlsx";
+      final filePath = "${output.path}/$filename.xlsx";
       final file = File(filePath);
       await file.writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(file.path)], text: 'Laporan Excel');
+      await Share.shareXFiles([XFile(file.path)], text: 'Laporan Excel $_selectedReportType');
     }
   }
 
