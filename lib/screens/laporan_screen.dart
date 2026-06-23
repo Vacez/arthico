@@ -30,6 +30,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
   late DateTime _selectedDate;
   final GlobalKey _chartKey = GlobalKey();
   bool _isWeekly = false; // true for weekly view, false for monthly
+  String _selectedReportType = 'Ringkasan'; // 'Ringkasan', 'Neraca', 'Laba Rugi', 'Buku Besar', 'Arus Kas'
 
   @override
   void initState() {
@@ -40,220 +41,228 @@ class _LaporanScreenState extends State<LaporanScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
+    
     return StreamBuilder<QuerySnapshot>(
       stream: _dbService.getGoals(),
       builder: (context, goalsSnapshot) {
         double totalSavings = 0;
+        List<QueryDocumentSnapshot> goalsList = [];
         if (goalsSnapshot.hasData) {
-          for (var doc in goalsSnapshot.data!.docs) {
+          goalsList = goalsSnapshot.data!.docs;
+          for (var doc in goalsList) {
             totalSavings += (doc['currentAmount'] ?? 0).toDouble();
           }
         }
 
         return StreamBuilder<QuerySnapshot>(
-          stream: _dbService.getAllTransactions(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
-            double income = 0;
-            double expense = 0;
-            double cumulativeBalance = 0;
-            List<BarChartGroupData> chartData = [];
-
-            if (snapshot.hasData) {
-              // Calculate cumulativeBalance up to the end of the selected month
-              for (var doc in snapshot.data!.docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                final timestamp = data['timestamp'] as Timestamp?;
-                if (timestamp == null) continue;
-                DateTime date = timestamp.toDate();
-                
-                double amt = (data['amount'] ?? 0).toDouble();
-                bool isIncome = data['type'] == 'Pemasukan';
-                
-                if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
-                  if (isIncome) {
-                    cumulativeBalance += amt;
-                  } else {
-                    cumulativeBalance -= amt;
-                  }
-                }
-              }
-
-              // Aggregate data based on selected period
-              if (_isWeekly) {
-                // Weekly aggregation within the selected month (initialize 5 weeks)
-                Map<int, double> weeklyIncome = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
-                Map<int, double> weeklyExpense = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
-                for (var doc in snapshot.data!.docs) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final timestamp = data['timestamp'] as Timestamp?;
-                  if (timestamp == null) continue;
-                  DateTime date = timestamp.toDate();
-                  if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-                    int weekOfMonth = ((date.day - 1) ~/ 7) + 1; // 1-5
-                    if (weekOfMonth > 5) weekOfMonth = 5;
-                    double amt = (data['amount'] ?? 0).toDouble();
-                    if (data['type'] == 'Pemasukan') {
-                      weeklyIncome[weekOfMonth] = (weeklyIncome[weekOfMonth] ?? 0) + amt;
-                    } else {
-                      weeklyExpense[weekOfMonth] = (weeklyExpense[weekOfMonth] ?? 0) + amt;
-                    }
-                  }
-                }
-                // Build chart data for each week sequentially (x goes from 1 to 5)
-                List<int> sortedWeeks = [1, 2, 3, 4, 5];
-                chartData = sortedWeeks.map((week) {
-                  double inc = weeklyIncome[week] ?? 0;
-                  double exp = weeklyExpense[week] ?? 0;
-                  return BarChartGroupData(
-                    x: week,
-                    barRods: [
-                      BarChartRodData(
-                        toY: inc, 
-                        color: Colors.blue, 
-                        width: 8,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                      ),
-                      BarChartRodData(
-                        toY: exp, 
-                        color: Colors.red, 
-                        width: 8,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                      ),
-                    ],
-                  );
-                }).toList();
-                // Sum totals for display
-                income = weeklyIncome.values.fold(0, (p, e) => p + e);
-                expense = weeklyExpense.values.fold(0, (p, e) => p + e);
-              } else {
-                // Existing monthly aggregation
-                for (var doc in snapshot.data!.docs) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final timestamp = data['timestamp'] as Timestamp?;
-                  if (timestamp == null) continue;
-                  DateTime date = timestamp.toDate();
-                  if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-                    double amt = (data['amount'] ?? 0).toDouble();
-                    if (data['type'] == 'Pemasukan') {
-                      income += amt;
-                    } else {
-                      expense += amt;
-                    }
-                  }
-                }
-                chartData = [
-                  BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: income, color: Colors.blue, width: 20)]),
-                  BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: expense, color: Colors.red, width: 20)]),
-                ];
-              }
+          stream: _dbService.getFixedExpenses(),
+          builder: (context, fixedExpensesSnapshot) {
+            List<QueryDocumentSnapshot> fixedExpensesList = [];
+            if (fixedExpensesSnapshot.hasData) {
+              fixedExpensesList = fixedExpensesSnapshot.data!.docs;
             }
 
-            bool isMobile = MediaQuery.of(context).size.width < 700;
+            return StreamBuilder<QuerySnapshot>(
+              stream: _dbService.getAllTransactions(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
-            return Padding(
-              padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
-              child: Column(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(isMobile ? 16 : 24),
-                    decoration: BoxDecoration(
-                      color: theme.card,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: theme.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          alignment: WrapAlignment.spaceBetween,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                double income = 0;
+                double expense = 0;
+                double cumulativeBalance = 0;
+                List<BarChartGroupData> chartData = [];
+
+                if (snapshot.hasData) {
+                  // Calculate cumulativeBalance up to the end of the selected month
+                  for (var doc in snapshot.data!.docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final timestamp = data['timestamp'] as Timestamp?;
+                    if (timestamp == null) continue;
+                    DateTime date = timestamp.toDate();
+                    
+                    double amt = (data['amount'] ?? 0).toDouble();
+                    bool isIncome = data['type'] == 'Pemasukan';
+                    
+                    if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+                      if (isIncome) {
+                        cumulativeBalance += amt;
+                      } else {
+                        cumulativeBalance -= amt;
+                      }
+                    }
+                  }
+
+                  // Aggregate data based on selected period
+                  if (_isWeekly) {
+                    // Weekly aggregation within the selected month (initialize 5 weeks)
+                    Map<int, double> weeklyIncome = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+                    Map<int, double> weeklyExpense = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+                    for (var doc in snapshot.data!.docs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final timestamp = data['timestamp'] as Timestamp?;
+                      if (timestamp == null) continue;
+                      DateTime date = timestamp.toDate();
+                      if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+                        int weekOfMonth = ((date.day - 1) ~/ 7) + 1; // 1-5
+                        if (weekOfMonth > 5) weekOfMonth = 5;
+                        double amt = (data['amount'] ?? 0).toDouble();
+                        if (data['type'] == 'Pemasukan') {
+                          weeklyIncome[weekOfMonth] = (weeklyIncome[weekOfMonth] ?? 0) + amt;
+                        } else {
+                          weeklyExpense[weekOfMonth] = (weeklyExpense[weekOfMonth] ?? 0) + amt;
+                        }
+                      }
+                    }
+                    // Build chart data for each week sequentially (x goes from 1 to 5)
+                    List<int> sortedWeeks = [1, 2, 3, 4, 5];
+                    chartData = sortedWeeks.map((week) {
+                      double inc = weeklyIncome[week] ?? 0;
+                      double exp = weeklyExpense[week] ?? 0;
+                      return BarChartGroupData(
+                        x: week,
+                        barRods: [
+                          BarChartRodData(
+                            toY: inc, 
+                            color: Colors.blue, 
+                            width: 8,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                          ),
+                          BarChartRodData(
+                            toY: exp, 
+                            color: Colors.red, 
+                            width: 8,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                          ),
+                        ],
+                      );
+                    }).toList();
+                    // Sum totals for display
+                    income = weeklyIncome.values.fold(0, (p, e) => p + e);
+                    expense = weeklyExpense.values.fold(0, (p, e) => p + e);
+                  } else {
+                    // Existing monthly aggregation
+                    for (var doc in snapshot.data!.docs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final timestamp = data['timestamp'] as Timestamp?;
+                      if (timestamp == null) continue;
+                      DateTime date = timestamp.toDate();
+                      if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+                        double amt = (data['amount'] ?? 0).toDouble();
+                        if (data['type'] == 'Pemasukan') {
+                          income += amt;
+                        } else {
+                          expense += amt;
+                        }
+                      }
+                    }
+                    chartData = [
+                      BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: income, color: Colors.blue, width: 20)]),
+                      BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: expense, color: Colors.red, width: 20)]),
+                    ];
+                  }
+                }
+
+                bool isMobile = MediaQuery.of(context).size.width < 700;
+
+                return Padding(
+                  padding: EdgeInsets.all(isMobile ? 12.0 : 24.0),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(isMobile ? 16 : 24),
+                        decoration: BoxDecoration(
+                          color: theme.card,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: theme.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                Icon(Icons.bar_chart, color: theme.accent),
-                                const SizedBox(width: 8),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text('Laporan Keuangan', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                                    Text(DateFormat('MMM yyyy').format(_selectedDate), style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                                    Icon(Icons.bar_chart, color: theme.accent),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Laporan Keuangan', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                        Text(DateFormat('MMM yyyy').format(_selectedDate), style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                                      ],
+                                    ),
                                   ],
+                                ),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () async {
+                                          final DateTime? picked = await showDatePicker(
+                                            context: context,
+                                            initialDate: _selectedDate,
+                                            firstDate: DateTime(2020),
+                                            lastDate: DateTime(2030),
+                                            builder: (context, child) {
+                                              return Theme(
+                                                data: Theme.of(context).copyWith(
+                                                  colorScheme: ColorScheme(
+                                                    brightness: theme.isDark ? Brightness.dark : Brightness.light,
+                                                    primary: const Color(0xFF818CF8),
+                                                    onPrimary: Colors.white,
+                                                    surface: theme.card,
+                                                    onSurface: theme.textPrimary,
+                                                    secondary: theme.accent,
+                                                    onSecondary: Colors.white,
+                                                    error: Colors.red,
+                                                    onError: Colors.white,
+                                                  ),
+                                                ),
+                                                child: child!,
+                                              );
+                                            },
+                                          );
+                                          if (picked != null) setState(() => _selectedDate = picked);
+                                        },
+                                        child: _filterDropdown(DateFormat('MMM yyyy').format(_selectedDate)),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _actionButton('PDF', const Color(0xFFEF4444), () => _exportPdf()),
+                                      const SizedBox(width: 8),
+                                      _actionButton('Excel', const Color(0xFF10B981), () => _exportExcel()),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () async {
-                                      final DateTime? picked = await showDatePicker(
-                                        context: context,
-                                        initialDate: _selectedDate,
-                                        firstDate: DateTime(2020),
-                                        lastDate: DateTime(2030),
-                                        builder: (context, child) {
-                                          return Theme(
-                                            data: Theme.of(context).copyWith(
-                                              colorScheme: ColorScheme(
-                                                brightness: theme.isDark ? Brightness.dark : Brightness.light,
-                                                primary: const Color(0xFF818CF8),
-                                                onPrimary: Colors.white,
-                                                surface: theme.card,
-                                                onSurface: theme.textPrimary,
-                                                secondary: theme.accent,
-                                                onSecondary: Colors.white,
-                                                error: Colors.red,
-                                                onError: Colors.white,
-                                              ),
-                                            ),
-                                            child: child!,
-                                          );
-                                        },
-                                      );
-                                      if (picked != null) setState(() => _selectedDate = picked);
-                                    },
-                                    child: _filterDropdown(DateFormat('MMM yyyy').format(_selectedDate)),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _actionButton('PDF', const Color(0xFFEF4444), () => _exportPdf()),
-                                  const SizedBox(width: 8),
-                                  _actionButton('Excel', const Color(0xFF10B981), () => _exportExcel()),
-                                ],
-                              ),
+                            const SizedBox(height: 24),
+                            _buildReportTypeSelector(),
+                            const SizedBox(height: 20),
+                            _buildCurrentReportContent(
+                              snapshot,
+                              chartData,
+                              income,
+                              expense,
+                              cumulativeBalance,
+                              totalSavings,
+                              goalsList,
+                              fixedExpensesList,
+                              isMobile,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
-                        isMobile 
-                          ? Column(
-                              children: [
-                                _buildChartArea(chartData),
-                                const SizedBox(height: 24),
-                                _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings),
-                              ],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(flex: 2, child: _buildChartArea(chartData)),
-                                const SizedBox(width: 24),
-                                Expanded(flex: 1, child: _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings)),
-                              ],
-                            ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  _buildRincianTransaksi(snapshot),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -642,5 +651,777 @@ class _LaporanScreenState extends State<LaporanScreen> {
       await file.writeAsBytes(bytes);
       await Share.shareXFiles([XFile(file.path)], text: 'Laporan Excel');
     }
+  }
+
+  Widget _buildReportTypeSelector() {
+    final theme = Provider.of<ThemeProvider>(context);
+    final reportTypes = [
+      {'id': 'Ringkasan', 'label': 'Ringkasan', 'icon': Icons.summarize_outlined},
+      {'id': 'Neraca', 'label': 'Neraca', 'icon': Icons.account_balance_outlined},
+      {'id': 'Laba Rugi', 'label': 'Laba Rugi', 'icon': Icons.analytics_outlined},
+      {'id': 'Buku Besar', 'label': 'Buku Besar', 'icon': Icons.menu_book_outlined},
+      {'id': 'Arus Kas', 'label': 'Arus Kas', 'icon': Icons.swap_horiz_outlined},
+    ];
+
+    return SizedBox(
+      height: 40,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: reportTypes.length,
+        itemBuilder: (context, index) {
+          final type = reportTypes[index];
+          final isSelected = _selectedReportType == type['id'];
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedReportType = type['id'] as String;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: isSelected
+                    ? const LinearGradient(
+                        colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isSelected ? null : (theme.isDark ? const Color(0xFF1E293B) : theme.inputBg),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isSelected ? Colors.transparent : theme.border,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    type['icon'] as IconData,
+                    color: isSelected ? Colors.white : theme.textSecondary,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    type['label'] as String,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : theme.textPrimary,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCurrentReportContent(
+    AsyncSnapshot<QuerySnapshot> snapshot,
+    List<BarChartGroupData> chartData,
+    double income,
+    double expense,
+    double cumulativeBalance,
+    double totalSavings,
+    List<QueryDocumentSnapshot> goalsList,
+    List<QueryDocumentSnapshot> fixedExpensesList,
+    bool isMobile,
+  ) {
+    switch (_selectedReportType) {
+      case 'Neraca':
+        return _buildNeracaView(cumulativeBalance, goalsList, fixedExpensesList);
+      case 'Laba Rugi':
+        return _buildLabaRugiView(snapshot.data?.docs ?? []);
+      case 'Buku Besar':
+        return _buildBukuBesarView(snapshot.data?.docs ?? []);
+      case 'Arus Kas':
+        return _buildArusKasView(snapshot.data?.docs ?? [], cumulativeBalance);
+      case 'Ringkasan':
+      default:
+        return Column(
+          children: [
+            isMobile
+                ? Column(
+                    children: [
+                      _buildChartArea(chartData),
+                      const SizedBox(height: 24),
+                      _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 2, child: _buildChartArea(chartData)),
+                      const SizedBox(width: 24),
+                      Expanded(flex: 1, child: _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings)),
+                    ],
+                  ),
+            const SizedBox(height: 24),
+            _buildRincianTransaksi(snapshot),
+          ],
+        );
+    }
+  }
+
+  Widget _buildNeracaView(double sisa, List<QueryDocumentSnapshot> goalsList, List<QueryDocumentSnapshot> fixedExpensesList) {
+    final theme = Provider.of<ThemeProvider>(context);
+
+    // Real assets
+    double cashBalance = sisa;
+    double totalGoalsAmount = goalsList.fold(0, (sum, doc) => sum + ((doc['currentAmount'] ?? 0) as num).toDouble());
+    
+    // Real short-term liabilities (fixed expenses total)
+    double shortTermLiabilities = fixedExpensesList.fold(0, (sum, doc) => sum + ((doc['amount'] ?? 0) as num).toDouble());
+
+    // Mock assets (for traditional neraca balance matching layout)
+    double personalHouse = 500000000;
+    double personalCar = 120000000;
+    
+    // Mock long-term liabilities
+    double carLoan = 80000000;
+    double mortgage = 350000000;
+
+    double totalLiquidAssets = cashBalance;
+    double totalInvestments = totalGoalsAmount;
+    double totalPersonalAssets = personalHouse + personalCar;
+    double totalAssets = totalLiquidAssets + totalInvestments + totalPersonalAssets;
+
+    double totalShortTerm = shortTermLiabilities + 5000000; // adding 5jt mock CC
+    double totalLongTerm = carLoan + mortgage;
+    double totalLiabilities = totalShortTerm + totalLongTerm;
+    double netWorth = totalAssets - totalLiabilities;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.border),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          // Header
+          Center(
+            child: Column(
+              children: [
+                Text('LAPORAN NERACA KEUANGAN', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                Text('(dalam Rupiah)', style: TextStyle(color: theme.textMuted, fontSize: 10, fontStyle: FontStyle.italic)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          // Two Column Layout
+          MediaQuery.of(context).size.width < 750
+              ? Column(
+                  children: [
+                    _buildNeracaAsetSection(cashBalance, goalsList, totalLiquidAssets, totalInvestments, totalPersonalAssets, totalAssets),
+                    const SizedBox(height: 24),
+                    _buildNeracaPasivaSection(shortTermLiabilities, carLoan, mortgage, totalShortTerm, totalLongTerm, totalLiabilities, netWorth, totalAssets),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildNeracaAsetSection(cashBalance, goalsList, totalLiquidAssets, totalInvestments, totalPersonalAssets, totalAssets),
+                    ),
+                    const SizedBox(width: 32),
+                    Expanded(
+                      child: _buildNeracaPasivaSection(shortTermLiabilities, carLoan, mortgage, totalShortTerm, totalLongTerm, totalLiabilities, netWorth, totalAssets),
+                    ),
+                  ],
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNeracaAsetSection(double cashBalance, List<QueryDocumentSnapshot> goalsList, double totalLiquid, double totalInvest, double totalPersonal, double totalAssets) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          color: const Color(0xFF10B981),
+          child: const Text('ASET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+        ),
+        const SizedBox(height: 12),
+        // Liquid Assets
+        const Text('Kas / Setara Kas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
+        const SizedBox(height: 4),
+        _neracaRow('Kas Utama / Saldo Dompet', cashBalance),
+        _neracaSubtotalRow('Total Kas / Setara Kas', totalLiquid),
+        const SizedBox(height: 12),
+        // Investments
+        const Text('Aset Investasi / Tabungan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
+        const SizedBox(height: 4),
+        if (goalsList.isEmpty)
+          _neracaRow('Tidak ada tujuan tabungan', 0)
+        else
+          ...goalsList.map((doc) => _neracaRow('Tabungan: ${doc['title']}', ((doc['currentAmount'] ?? 0) as num).toDouble())),
+        _neracaSubtotalRow('Total Aset Investasi', totalInvest),
+        const SizedBox(height: 12),
+        // Personal Assets
+        const Text('Aset Penggunaan Pribadi (Estimasi)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
+        const SizedBox(height: 4),
+        _neracaRow('Rumah Pribadi', 500000000),
+        _neracaRow('Kendaraan / Mobil', 120000000),
+        _neracaSubtotalRow('Total Aset Pribadi', totalPersonal),
+        const SizedBox(height: 20),
+        _neracaTotalRow('TOTAL ASET', totalAssets),
+      ],
+    );
+  }
+
+  Widget _buildNeracaPasivaSection(double shortTermFixed, double carLoan, double mortgage, double totalShort, double totalLong, double totalLiab, double netWorth, double totalAssetsAndNetWorth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          color: const Color(0xFFEF4444),
+          child: const Text('KEWAJIBAN & KEKAYAAN BERSIH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+        ),
+        const SizedBox(height: 12),
+        // Short-term Liabilities
+        const Text('Kewajiban Jangka Pendek', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
+        const SizedBox(height: 4),
+        _neracaRow('List Kebutuhan Bulanan', shortTermFixed),
+        _neracaRow('Kartu Kredit (Mock)', 5000000),
+        _neracaSubtotalRow('Total Kewajiban Jangka Pendek', totalShort),
+        const SizedBox(height: 12),
+        // Long-term Liabilities
+        const Text('Kewajiban Jangka Panjang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
+        const SizedBox(height: 4),
+        _neracaRow('Kredit Mobil (Mock)', carLoan),
+        _neracaRow('Pinjaman Hipotek (Mock)', mortgage),
+        _nerSubtotalRow('Total Kewajiban Jangka Panjang', totalLong),
+        const SizedBox(height: 12),
+        _nerSubtotalRow('Total Hutang / Kewajiban', totalLiab),
+        const SizedBox(height: 16),
+        // Net Worth
+        const Text('Kekayaan Bersih', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
+        const SizedBox(height: 4),
+        _neracaRow('Nilai Kekayaan Bersih (Ekuitas)', netWorth),
+        const SizedBox(height: 24),
+        _neracaTotalRow('TOTAL HUTANG & KEKAYAAN BERSIH', totalAssetsAndNetWorth),
+      ],
+    );
+  }
+
+  Widget _neracaRow(String label, double value) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 11))),
+          Text(currencyFormatter.format(value), style: TextStyle(color: theme.textPrimary, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _neracaSubtotalRow(String label, double value) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold))),
+          Container(
+            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey, width: 1))),
+            child: Text(currencyFormatter.format(value), style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _nerSubtotalRow(String label, double value) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold))),
+          Text(currencyFormatter.format(value), style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _neracaTotalRow(String label, double value) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.grey, width: 1),
+          bottom: BorderSide(color: Colors.grey, width: 2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: theme.textPrimary, fontSize: 12, fontWeight: FontWeight.bold))),
+          Text(currencyFormatter.format(value), style: TextStyle(color: theme.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLabaRugiView(List<QueryDocumentSnapshot> transactions) {
+    final theme = Provider.of<ThemeProvider>(context);
+
+    // Grouping
+    Map<String, double> incomeByCat = {};
+    Map<String, double> expenseByCat = {};
+
+    double totalIncome = 0;
+    double totalExpense = 0;
+
+    for (var doc in transactions) {
+      final data = doc.data() as Map<String, dynamic>;
+      final timestamp = data['timestamp'] as Timestamp?;
+      if (timestamp == null) continue;
+      DateTime date = timestamp.toDate();
+
+      if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        double amt = (data['amount'] ?? 0).toDouble();
+        String type = data['type'] ?? '';
+        String cat = data['category'] ?? 'Lainnya';
+
+        if (type == 'Pemasukan') {
+          incomeByCat[cat] = (incomeByCat[cat] ?? 0) + amt;
+          totalIncome += amt;
+        } else {
+          expenseByCat[cat] = (expenseByCat[cat] ?? 0) + amt;
+          totalExpense += amt;
+        }
+      }
+    }
+
+    double netProfit = totalIncome - totalExpense;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.border),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Center(
+            child: Column(
+              children: [
+                Text('LAPORAN LABA RUGI', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+
+          // 1. PENDAPATAN (INCOME)
+          Text('PENDAPATAN', style: TextStyle(color: theme.accent, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.1)),
+          const SizedBox(height: 8),
+          if (incomeByCat.isEmpty)
+            _neracaRow('Tidak ada pendapatan', 0)
+          else
+            ...incomeByCat.entries.map((e) => _neracaRow(e.key, e.value)),
+          _neracaSubtotalRow('Total Pendapatan', totalIncome),
+          const SizedBox(height: 24),
+
+          // 2. BEBAN / PENGELUARAN (EXPENSES)
+          Text('BEBAN & PENGELUARAN', style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.1)),
+          const SizedBox(height: 8),
+          if (expenseByCat.isEmpty)
+            _neracaRow('Tidak ada pengeluaran', 0)
+          else
+            ...expenseByCat.entries.map((e) => _neracaRow(e.key, e.value)),
+          _neracaSubtotalRow('Total Beban / Pengeluaran', totalExpense),
+          const SizedBox(height: 24),
+
+          // 3. LABA / RUGI BERSIH (NET INCOME)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            decoration: BoxDecoration(
+              color: netProfit >= 0 ? const Color(0xFF10B981).withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: netProfit >= 0 ? const Color(0xFF10B981).withOpacity(0.3) : Colors.redAccent.withOpacity(0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  netProfit >= 0 ? 'LABA BERSIH' : 'RUGI BERSIH',
+                  style: TextStyle(
+                    color: netProfit >= 0 ? const Color(0xFF10B981) : Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  currencyFormatter.format(netProfit),
+                  style: TextStyle(
+                    color: netProfit >= 0 ? const Color(0xFF10B981) : Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBukuBesarView(List<QueryDocumentSnapshot> transactions) {
+    final theme = Provider.of<ThemeProvider>(context);
+
+    // Group transactions by category
+    Map<String, List<Map<String, dynamic>>> transactionsByCat = {};
+
+    for (var doc in transactions) {
+      final data = doc.data() as Map<String, dynamic>;
+      final timestamp = data['timestamp'] as Timestamp?;
+      if (timestamp == null) continue;
+      DateTime date = timestamp.toDate();
+
+      if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        String cat = data['category'] ?? 'Lainnya';
+        if (!transactionsByCat.containsKey(cat)) {
+          transactionsByCat[cat] = [];
+        }
+        transactionsByCat[cat]!.add({
+          'id': doc.id,
+          'date': date,
+          'type': data['type'],
+          'amount': (data['amount'] ?? 0).toDouble(),
+          'note': data['note'] ?? '',
+        });
+      }
+    }
+
+    // Sort transactions inside each category by date ascending
+    transactionsByCat.forEach((key, list) {
+      list.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+    });
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.border),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Center(
+            child: Column(
+              children: [
+                Text('BUKU BESAR KEUANGAN', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+
+          if (transactionsByCat.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Text('Tidak ada data transaksi', style: TextStyle(color: theme.textMuted)),
+              ),
+            )
+          else
+            ...transactionsByCat.entries.map((entry) {
+              String cat = entry.key;
+              var txList = entry.value;
+
+              double totalDebet = txList.where((tx) => tx['type'] == 'Pemasukan').fold(0, (sum, tx) => sum + (tx['amount'] as double));
+              double totalKredit = txList.where((tx) => tx['type'] == 'Pengeluaran').fold(0, (sum, tx) => sum + (tx['amount'] as double));
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: theme.isDark ? Colors.black12 : theme.inputBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: theme.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Category Title
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: theme.accent.withOpacity(0.1),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        border: Border(bottom: BorderSide(color: theme.border)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.folder_open, color: theme.accent, size: 16),
+                          const SizedBox(width: 8),
+                          Text('Akun/Kategori: $cat', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                          const Spacer(),
+                          Text(
+                            'D: ${currencyFormatter.format(totalDebet)} | K: ${currencyFormatter.format(totalKredit)}',
+                            style: TextStyle(color: theme.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Table Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          Expanded(flex: 2, child: Text('Tanggal', style: TextStyle(color: theme.textMuted, fontSize: 10, fontWeight: FontWeight.bold))),
+                          Expanded(flex: 4, child: Text('Keterangan', style: TextStyle(color: theme.textMuted, fontSize: 10, fontWeight: FontWeight.bold))),
+                          Expanded(flex: 3, child: Text('Debet (+)', style: TextStyle(color: theme.textMuted, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                          Expanded(flex: 3, child: Text('Kredit (-)', style: TextStyle(color: theme.textMuted, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    // Transactions List
+                    ...txList.map((tx) {
+                      bool isIncome = tx['type'] == 'Pemasukan';
+                      double amount = tx['amount'] as double;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Text(DateFormat('dd/MM/yyyy').format(tx['date'] as DateTime), style: TextStyle(color: theme.textSecondary, fontSize: 10)),
+                            ),
+                            Expanded(
+                              flex: 4,
+                              child: Text(tx['note'] as String, style: TextStyle(color: theme.textPrimary, fontSize: 10), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(isIncome ? currencyFormatter.format(amount) : '-', style: TextStyle(color: isIncome ? Colors.blue : theme.textSecondary, fontSize: 10), textAlign: TextAlign.right),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(!isIncome ? currencyFormatter.format(amount) : '-', style: TextStyle(color: !isIncome ? Colors.red : theme.textSecondary, fontSize: 10), textAlign: TextAlign.right),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildArusKasView(List<QueryDocumentSnapshot> transactions, double cumulativeBalance) {
+    final theme = Provider.of<ThemeProvider>(context);
+
+    double flowOperasiIn = 0;
+    double flowOperasiOut = 0;
+    double flowInvestasiIn = 0;
+    double flowInvestasiOut = 0;
+    double flowPendanaanIn = 0;
+    double flowPendanaanOut = 0;
+
+    for (var doc in transactions) {
+      final data = doc.data() as Map<String, dynamic>;
+      final timestamp = data['timestamp'] as Timestamp?;
+      if (timestamp == null) continue;
+      DateTime date = timestamp.toDate();
+
+      if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        double amt = (data['amount'] ?? 0).toDouble();
+        String type = data['type'] ?? '';
+        String cat = data['category'] ?? 'Lainnya';
+
+        // Classification
+        if (cat == 'Tabungan' || cat == 'Investasi' || cat == 'Emas' || cat == 'Saham' || cat == 'Goals') {
+          if (type == 'Pemasukan') {
+            flowInvestasiIn += amt;
+          } else {
+            flowInvestasiOut += amt;
+          }
+        } else if (cat == 'Hutang' || cat == 'Pinjaman' || cat == 'Modal' || cat == 'Cicilan' || cat == 'Kredit') {
+          if (type == 'Pemasukan') {
+            flowPendanaanIn += amt;
+          } else {
+            flowPendanaanOut += amt;
+          }
+        } else {
+          // Default to Operating
+          if (type == 'Pemasukan') {
+            flowOperasiIn += amt;
+          } else {
+            flowOperasiOut += amt;
+          }
+        }
+      }
+    }
+
+    double netOperasi = flowOperasiIn - flowOperasiOut;
+    double netInvestasi = flowInvestasiIn - flowInvestasiOut;
+    double netPendanaan = flowPendanaanIn - flowPendanaanOut;
+    double netFlow = netOperasi + netInvestasi + netPendanaan;
+
+    // Saldo Akhir Kas = cumulativeBalance at the end of the selected month
+    double saldoAkhir = cumulativeBalance;
+    // Saldo Awal Kas = Saldo Akhir - Net Flow of the month
+    double saldoAwal = saldoAkhir - netFlow;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.border),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Center(
+            child: Column(
+              children: [
+                Text('LAPORAN ARUS KAS', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+
+          // Saldo Awal
+          _arusKasTotalRow('SALDO AWAL KAS', saldoAwal, isBold: true),
+          const SizedBox(height: 16),
+
+          // A. OPERATING FLOW
+          Text('A. Arus Kas Dari Aktivitas Operasi', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 6),
+          if (flowOperasiIn > 0) _arusKasRow('Penerimaan Kas (Pendapatan)', flowOperasiIn),
+          if (flowOperasiOut > 0) _arusKasRow('Pengeluaran Kas (Beban Operasional)', -flowOperasiOut),
+          _arusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Operasi', netOperasi),
+          const SizedBox(height: 16),
+
+          // B. INVESTING FLOW
+          Text('B. Arus Kas Dari Aktivitas Investasi', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 6),
+          if (flowInvestasiIn > 0) _arusKasRow('Penerimaan Investasi/Tabungan', flowInvestasiIn),
+          if (flowInvestasiOut > 0) _arusKasRow('Penempatan Investasi/Tabungan', -flowInvestasiOut),
+          _arusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Investasi', netInvestasi),
+          const SizedBox(height: 16),
+
+          // C. FINANCING FLOW
+          Text('C. Arus Kas Dari Aktivitas Pendanaan', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 6),
+          if (flowPendanaanIn > 0) _arusKasRow('Penerimaan Pinjaman/Modal', flowPendanaanIn),
+          if (flowPendanaanOut > 0) _arusKasRow('Pelunasan Pinjaman/Hutang/Cicilan', -flowPendanaanOut),
+          _arusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Pendanaan', netPendanaan),
+          const SizedBox(height: 20),
+
+          // Net Movement
+          _arusKasTotalRow('KENAIKAN / (PENURUNAN) KAS BERSIH (A+B+C)', netFlow),
+          const SizedBox(height: 12),
+          _arusKasTotalRow('SALDO AKHIR KAS', saldoAkhir, isBold: true, underline: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _arusKasRow(String label, double value) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 11))),
+          Text(
+            (value >= 0 ? '' : '-') + currencyFormatter.format(value.abs()),
+            style: TextStyle(color: theme.textPrimary, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _arusKasSubtotalRow(String label, double value) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold))),
+          Container(
+            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey, width: 1))),
+            child: Text(
+              (value >= 0 ? '' : '-') + currencyFormatter.format(value.abs()),
+              style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _arusKasTotalRow(String label, double value, {bool isBold = false, bool underline = false}) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      decoration: BoxDecoration(
+        color: isBold ? (theme.isDark ? Colors.white10 : Colors.grey.withOpacity(0.05)) : null,
+        border: underline
+            ? const Border(
+                top: BorderSide(color: Colors.grey, width: 1),
+                bottom: BorderSide(color: Colors.grey, width: 2),
+              )
+            : const Border(
+                top: BorderSide(color: Colors.grey, width: 1),
+                bottom: BorderSide(color: Colors.grey, width: 1),
+              ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold))),
+          Text(
+            (value >= 0 ? '' : '-') + currencyFormatter.format(value.abs()),
+            style: TextStyle(color: theme.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
   }
 }
