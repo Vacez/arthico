@@ -536,6 +536,126 @@ class _LaporanScreenState extends State<LaporanScreen> {
       return 'Rp ' + NumberFormat.decimalPattern('id').format(val.toInt());
     }
 
+    final pdfNeracaRow = (String label, String value) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(child: pw.Text(label, style: const pw.TextStyle(fontSize: 8))),
+            pw.Text(value, style: const pw.TextStyle(fontSize: 8)),
+          ],
+        ),
+      );
+    };
+
+    final pdfNeracaSubtotalRow = (String label, String value) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: pw.Container(
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
+          ),
+          padding: const pw.EdgeInsets.only(bottom: 2),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Expanded(child: pw.Text(label, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
+              pw.Text(value, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+            ],
+          ),
+        ),
+      );
+    };
+
+    final pdfNeracaTotalRow = (String label, String value) {
+      return pw.Container(
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(
+            top: pw.BorderSide(color: PdfColors.black, width: 0.8),
+            bottom: pw.BorderSide(color: PdfColors.black, width: 1.5),
+          ),
+        ),
+        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(child: pw.Text(label, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold))),
+            pw.Text(value, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+          ],
+        ),
+      );
+    };
+
+    final pdfArusKasRow = (String label, double value) {
+      final isNegative = value < 0;
+      final formattedVal = (isNegative ? '-' : '') + formatCurrencyPdf(value.abs());
+      return pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(child: pw.Text(label, style: const pw.TextStyle(fontSize: 8))),
+            pw.Text(formattedVal, style: const pw.TextStyle(fontSize: 8)),
+          ],
+        ),
+      );
+    };
+
+    final pdfArusKasHeaderBlock = (String title) {
+      return pw.Container(
+        width: double.infinity,
+        color: PdfColor.fromHex('#EEF2F6'), // Soft gray-blue background
+        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+        margin: const pw.EdgeInsets.only(top: 10, bottom: 4),
+        child: pw.Text(title, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
+      );
+    };
+
+    final pdfArusKasSubtotalRow = (String label, double value) {
+      final isNegative = value < 0;
+      final formattedVal = (isNegative ? '-' : '') + formatCurrencyPdf(value.abs());
+      return pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        child: pw.Container(
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
+          ),
+          padding: const pw.EdgeInsets.only(bottom: 2),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Expanded(child: pw.Text(label, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
+              pw.Text(formattedVal, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+            ],
+          ),
+        ),
+      );
+    };
+
+    final pdfArusKasTotalBlock = (String label, double value, {required bool isStart}) {
+      final isNegative = value < 0;
+      final formattedVal = (isNegative ? '-' : '') + formatCurrencyPdf(value.abs());
+      final bgColor = isStart ? PdfColor.fromHex('#DBEAFE') : PdfColor.fromHex('#D1FAE5'); // blue100 vs green100
+      final textColor = isStart ? PdfColor.fromHex('#1E3A8A') : PdfColor.fromHex('#064E3B'); // blue900 vs green900
+      
+      return pw.Container(
+        margin: const pw.EdgeInsets.symmetric(vertical: 6),
+        padding: const pw.EdgeInsets.all(6),
+        decoration: pw.BoxDecoration(
+          color: bgColor,
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+        ),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(child: pw.Text(label, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: textColor))),
+            pw.Text(formattedVal, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: textColor)),
+          ],
+        ),
+      );
+    };
+
     if (_selectedReportType == 'Neraca') {
       // ----------------------------------------------------
       // NERACA PDF
@@ -573,55 +693,126 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
       pdf.addPage(pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
           return [
             pw.Center(
               child: pw.Column(
                 children: [
-                  pw.Text('LAPORAN NERACA KEUANGAN', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
-                  pw.Text('(dalam Rupiah)', style: pw.TextStyle(fontSize: 10, fontStyle: pw.FontStyle.italic)),
+                  pw.Text('LAPORAN NERACA KEUANGAN', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text('(dalam Rupiah)', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
                 ],
               ),
             ),
-            pw.SizedBox(height: 20),
-            pw.Divider(),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height: 15),
+            pw.Divider(thickness: 1, color: PdfColors.grey300),
+            pw.SizedBox(height: 15),
             
-            pw.TableHelper.fromTextArray(
-              headers: ['Keterangan Aset', 'Nilai (Rp)', 'Keterangan Kewajiban & Ekuitas', 'Nilai (Rp)'],
-              data: [
-                ['ASET LANCAR / KAS', '', 'KEWAJIBAN JANGKA PENDEK', ''],
-                ['  Kas Utama / Saldo Dompet', formatCurrencyPdf(cashBalance), '  List Kebutuhan Bulanan', formatCurrencyPdf(shortTermLiabilities)],
-                ['', '', '  Kartu Kredit (Mock)', formatCurrencyPdf(5000000)],
-                ['Total Kas & Setara Kas', formatCurrencyPdf(totalLiquid), 'Total Kewajiban Jk. Pendek', formatCurrencyPdf(totalShort)],
-                ['', '', '', ''],
-                ['ASET INVESTASI', '', 'KEWAJIBAN JANGKA PANJANG', ''],
-                ...goalsSnapshot.docs.map((doc) => [
-                  '  Tabungan: ${doc.data()['title']}', 
-                  formatCurrencyPdf(((doc.data()['currentAmount'] ?? 0) as num).toDouble()), 
-                  '', 
-                  ''
-                ]),
-                ['Total Aset Investasi', formatCurrencyPdf(totalInvest), '  Kredit Mobil (Mock)', formatCurrencyPdf(carLoan)],
-                ['', '', '  Pinjaman Hipotek (Mock)', formatCurrencyPdf(mortgage)],
-                ['', '', 'Total Kewajiban Jk. Panjang', formatCurrencyPdf(totalLong)],
-                ['', '', 'TOTAL KEWAJIBAN', formatCurrencyPdf(totalLiabilities)],
-                ['ASET PENGGUNAAN PRIBADI', '', '', ''],
-                ['  Rumah Pribadi', formatCurrencyPdf(personalHouse), 'KEKAYAAN BERSIH', ''],
-                ['  Kendaraan / Mobil', formatCurrencyPdf(personalCar), '  Nilai Kekayaan Bersih (Ekuitas)', formatCurrencyPdf(netWorth)],
-                ['Total Aset Pribadi', formatCurrencyPdf(totalPersonal), '', ''],
-                ['', '', '', ''],
-                ['TOTAL ASET', formatCurrencyPdf(totalAssets), 'TOTAL KEWAJIBAN & EKUITAS', formatCurrencyPdf(totalAssets)],
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // LEFT COLUMN: ASET
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      // Aset Banner
+                      pw.Container(
+                        width: double.infinity,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                        decoration: pw.BoxDecoration(
+                          color: PdfColor.fromHex('#10B981'),
+                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                        ),
+                        child: pw.Text('ASET', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                      ),
+                      pw.SizedBox(height: 10),
+                      
+                      // Kas / Setara Kas
+                      pw.Text('Kas & Setara Kas', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
+                      pw.SizedBox(height: 4),
+                      pdfNeracaRow('Kas Utama / Saldo Dompet', formatCurrencyPdf(cashBalance)),
+                      pdfNeracaSubtotalRow('Total Kas & Setara Kas', formatCurrencyPdf(totalLiquid)),
+                      pw.SizedBox(height: 10),
+                      
+                      // Aset Investasi
+                      pw.Text('Aset Investasi', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
+                      pw.SizedBox(height: 4),
+                      if (goalsSnapshot.docs.isEmpty)
+                        pdfNeracaRow('Tidak ada tujuan tabungan', formatCurrencyPdf(0))
+                      else
+                        ...goalsSnapshot.docs.map((doc) {
+                          final title = _sanitizeForPdf(doc.data()['title'] ?? 'Tabungan');
+                          final amount = ((doc.data()['currentAmount'] ?? 0) as num).toDouble();
+                          return pdfNeracaRow('Tabungan: $title', formatCurrencyPdf(amount));
+                        }),
+                      pdfNeracaSubtotalRow('Total Aset Investasi', formatCurrencyPdf(totalInvest)),
+                      pw.SizedBox(height: 10),
+                      
+                      // Aset Pribadi
+                      pw.Text('Aset Penggunaan Pribadi (Estimasi)', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
+                      pw.SizedBox(height: 4),
+                      pdfNeracaRow('Rumah Pribadi', formatCurrencyPdf(personalHouse)),
+                      pdfNeracaRow('Kendaraan / Mobil', formatCurrencyPdf(personalCar)),
+                      pdfNeracaSubtotalRow('Total Aset Pribadi', formatCurrencyPdf(totalPersonal)),
+                      pw.SizedBox(height: 20),
+                      
+                      // Total Aset
+                      pdfNeracaTotalRow('TOTAL ASET', formatCurrencyPdf(totalAssets)),
+                    ],
+                  ),
+                ),
+                
+                pw.SizedBox(width: 24),
+                
+                // RIGHT COLUMN: KEWAJIBAN & EKUITAS
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      // Kewajiban Banner
+                      pw.Container(
+                        width: double.infinity,
+                        padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                        decoration: pw.BoxDecoration(
+                          color: PdfColor.fromHex('#EF4444'),
+                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                        ),
+                        child: pw.Text('KEWAJIBAN & EKUITAS', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                      ),
+                      pw.SizedBox(height: 10),
+                      
+                      // Kewajiban Jangka Pendek
+                      pw.Text('Kewajiban Jangka Pendek', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
+                      pw.SizedBox(height: 4),
+                      pdfNeracaRow('List Kebutuhan Bulanan', formatCurrencyPdf(shortTermLiabilities)),
+                      pdfNeracaRow('Kartu Kredit (Mock)', formatCurrencyPdf(5000000)),
+                      pdfNeracaSubtotalRow('Total Kewajiban Jangka Pendek', formatCurrencyPdf(totalShort)),
+                      pw.SizedBox(height: 10),
+                      
+                      // Kewajiban Jangka Panjang
+                      pw.Text('Kewajiban Jangka Panjang', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
+                      pw.SizedBox(height: 4),
+                      pdfNeracaRow('Kredit Mobil (Mock)', formatCurrencyPdf(carLoan)),
+                      pdfNeracaRow('Pinjaman Hipotek (Mock)', formatCurrencyPdf(mortgage)),
+                      pdfNeracaSubtotalRow('Total Kewajiban Jangka Panjang', formatCurrencyPdf(totalLong)),
+                      pdfNeracaSubtotalRow('Total Kewajiban', formatCurrencyPdf(totalLiabilities)),
+                      pw.SizedBox(height: 10),
+                      
+                      // Kekayaan Bersih
+                      pw.Text('Kekayaan Bersih', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
+                      pw.SizedBox(height: 4),
+                      pdfNeracaRow('Nilai Kekayaan Bersih (Ekuitas)', formatCurrencyPdf(netWorth)),
+                      pw.SizedBox(height: 20),
+                      
+                      // Total Kewajiban & Ekuitas
+                      pdfNeracaTotalRow('TOTAL HUTANG & KEKAYAAN BERSIH', formatCurrencyPdf(totalAssets)),
+                    ],
+                  ),
+                ),
               ],
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
-              cellStyle: const pw.TextStyle(fontSize: 8),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-              cellAlignment: pw.Alignment.centerLeft,
-              cellAlignments: {
-                1: pw.Alignment.centerRight,
-                3: pw.Alignment.centerRight,
-              },
             ),
           ];
         },
@@ -860,48 +1051,53 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
       pdf.addPage(pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
           return [
             pw.Center(
               child: pw.Column(
                 children: [
-                  pw.Text('LAPORAN ARUS KAS', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
+                  pw.Text('LAPORAN ARUS KAS', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
                 ],
               ),
             ),
-            pw.SizedBox(height: 20),
-            pw.Divider(),
+            pw.SizedBox(height: 15),
+            pw.Divider(thickness: 1, color: PdfColors.grey300),
             pw.SizedBox(height: 10),
 
-            pw.TableHelper.fromTextArray(
-              headers: ['Aktivitas Aliran Kas', 'Nominal (Rp)'],
-              data: [
-                ['SALDO AWAL KAS', formatCurrencyPdf(saldoAwal)],
-                ['', ''],
-                ['A. Arus Kas Dari Aktivitas Operasi', ''],
-                ['  Penerimaan Kas (Pendapatan)', formatCurrencyPdf(flowOperasiIn)],
-                ['  Pengeluaran Kas (Beban Operasional)', formatCurrencyPdf(-flowOperasiOut)],
-                ['Jumlah Kas Bersih dari Aktivitas Operasi', formatCurrencyPdf(netOperasi)],
-                ['', ''],
-                ['B. Arus Kas Dari Aktivitas Investasi', ''],
-                ['  Penerimaan Investasi/Tabungan', formatCurrencyPdf(flowInvestasiIn)],
-                ['  Penempatan Investasi/Tabungan', formatCurrencyPdf(-flowInvestasiOut)],
-                ['Jumlah Kas Bersih dari Aktivitas Investasi', formatCurrencyPdf(netInvestasi)],
-                ['', ''],
-                ['C. Arus Kas Dari Aktivitas Pendanaan', ''],
-                ['  Penerimaan Pinjaman/Modal', formatCurrencyPdf(flowPendanaanIn)],
-                ['  Pelunasan Pinjaman/Hutang/Cicilan', formatCurrencyPdf(-flowPendanaanOut)],
-                ['Jumlah Kas Bersih dari Aktivitas Pendanaan', formatCurrencyPdf(netPendanaan)],
-                ['', ''],
-                ['KENAIKAN / (PENURUNAN) KAS BERSIH', formatCurrencyPdf(netFlow)],
-                ['SALDO AKHIR KAS', formatCurrencyPdf(saldoAkhir)],
-              ],
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
-              cellStyle: const pw.TextStyle(fontSize: 9),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-              cellAlignments: {1: pw.Alignment.centerRight},
-            ),
+            pdfArusKasTotalBlock('SALDO AWAL KAS', saldoAwal, isStart: true),
+            pw.SizedBox(height: 5),
+
+            // A. OPERATING
+            pdfArusKasHeaderBlock('A. Arus Kas Dari Aktivitas Operasi'),
+            if (flowOperasiIn > 0) pdfArusKasRow('Penerimaan Kas (Pendapatan)', flowOperasiIn),
+            if (flowOperasiOut > 0) pdfArusKasRow('Pengeluaran Kas (Beban Operasional)', -flowOperasiOut),
+            if (flowOperasiIn == 0 && flowOperasiOut == 0) pdfArusKasRow('Tidak ada aktivitas operasi', 0),
+            pdfArusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Operasi', netOperasi),
+
+            // B. INVESTING
+            pdfArusKasHeaderBlock('B. Arus Kas Dari Aktivitas Investasi'),
+            if (flowInvestasiIn > 0) pdfArusKasRow('Penerimaan Investasi/Tabungan', flowInvestasiIn),
+            if (flowInvestasiOut > 0) pdfArusKasRow('Penempatan Investasi/Tabungan', -flowInvestasiOut),
+            if (flowInvestasiIn == 0 && flowInvestasiOut == 0) pdfArusKasRow('Tidak ada aktivitas investasi', 0),
+            pdfArusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Investasi', netInvestasi),
+
+            // C. FINANCING
+            pdfArusKasHeaderBlock('C. Arus Kas Dari Aktivitas Pendanaan'),
+            if (flowPendanaanIn > 0) pdfArusKasRow('Penerimaan Pinjaman/Modal', flowPendanaanIn),
+            if (flowPendanaanOut > 0) pdfArusKasRow('Pelunasan Pinjaman/Hutang/Cicilan', -flowPendanaanOut),
+            if (flowPendanaanIn == 0 && flowPendanaanOut == 0) pdfArusKasRow('Tidak ada aktivitas pendanaan', 0),
+            pdfArusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Pendanaan', netPendanaan),
+
+            pw.SizedBox(height: 15),
+            pw.Divider(thickness: 0.5, color: PdfColors.grey300),
+            pw.SizedBox(height: 5),
+
+            // NET FLOW & END BALANCE
+            pdfArusKasSubtotalRow('KENAIKAN / (PENURUNAN) KAS BERSIH (A+B+C)', netFlow),
+            pdfArusKasTotalBlock('SALDO AKHIR KAS', saldoAkhir, isStart: false),
           ];
         },
       ));
