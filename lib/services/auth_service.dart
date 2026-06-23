@@ -21,6 +21,26 @@ class AuthService {
         return {'user': null, 'error': 'Dibatalkan oleh pengguna'};
       }
 
+      final String email = googleUser.email.trim().toLowerCase();
+
+      // Check if email exists in users collection in Firestore
+      final QuerySnapshot query = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        // Sign out of Google first to clean up Google Sign-In state
+        try {
+          await _googleSignIn.signOut();
+        } catch (_) {}
+        return {
+          'user': null,
+          'error': 'Email belum terdaftar. Silakan lakukan registrasi terlebih dahulu.'
+        };
+      }
+
       // Obtain the auth details from the request
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
@@ -57,8 +77,9 @@ class AuthService {
   // Sign up with email & password
   Future<Map<String, dynamic>> signUp(String email, String password, String name) async {
     try {
+      final String normalizedEmail = email.trim().toLowerCase();
       UserCredential result = await _auth.createUserWithEmailAndPassword(
-          email: email, password: password);
+          email: normalizedEmail, password: password);
       User? user = result.user;
       
       // Update display name
@@ -71,7 +92,7 @@ class AuthService {
       await FirebaseFirestore.instance.collection('users').doc(user?.uid).set({
         'uid': user?.uid,
         'name': name,
-        'email': email,
+        'email': normalizedEmail,
         'createdAt': FieldValue.serverTimestamp(),
         'balance': 0,
       });
@@ -79,7 +100,7 @@ class AuthService {
       return {'user': user, 'error': null};
     } on FirebaseAuthException catch (e) {
       String message = 'Terjadi kesalahan';
-      if (e.code == 'email-already-in-white') {
+      if (e.code == 'email-already-in-use' || e.code == 'email-already-in-white') {
         message = 'Email sudah terdaftar';
       } else if (e.code == 'weak-password') {
         message = 'Password terlalu lemah';
@@ -101,8 +122,9 @@ class AuthService {
       User? user = result.user;
       
       if (user != null) {
+        final String normalizedEmail = email.trim().toLowerCase();
         // Link email and password
-        AuthCredential emailCred = EmailAuthProvider.credential(email: email, password: password);
+        AuthCredential emailCred = EmailAuthProvider.credential(email: normalizedEmail, password: password);
         await user.linkWithCredential(emailCred);
         
         await user.updateDisplayName(name);
@@ -110,7 +132,7 @@ class AuthService {
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'uid': user.uid,
           'name': name,
-          'email': email,
+          'email': normalizedEmail,
           'createdAt': FieldValue.serverTimestamp(),
           'balance': 0,
         });
@@ -124,8 +146,9 @@ class AuthService {
   // Sign in with email & password
   Future<Map<String, dynamic>> signIn(String email, String password) async {
     try {
+      final String normalizedEmail = email.trim().toLowerCase();
       UserCredential result = await _auth.signInWithEmailAndPassword(
-          email: email, password: password);
+          email: normalizedEmail, password: password);
       return {'user': result.user, 'error': null};
     } on FirebaseAuthException catch (e) {
       String message = 'Gagal login';
