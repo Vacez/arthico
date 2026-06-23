@@ -21,26 +21,6 @@ class AuthService {
         return {'user': null, 'error': 'Dibatalkan oleh pengguna'};
       }
 
-      final String email = googleUser.email.trim().toLowerCase();
-
-      // Check if email exists in users collection in Firestore
-      final QuerySnapshot query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      if (query.docs.isEmpty) {
-        // Sign out of Google first to clean up Google Sign-In state
-        try {
-          await _googleSignIn.signOut();
-        } catch (_) {}
-        return {
-          'user': null,
-          'error': 'Email belum terdaftar. Silakan lakukan registrasi terlebih dahulu.'
-        };
-      }
-
       // Obtain the auth details from the request
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
@@ -55,13 +35,42 @@ class AuthService {
       User? user = userCredential.user;
 
       if (user != null) {
-        // check if user document exists in firestore, if not create
+        final String email = user.email?.trim().toLowerCase() ?? '';
+
+        // Check if email exists in users collection in Firestore
+        final QuerySnapshot query = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (query.docs.isEmpty) {
+          // If the email is not registered in Firestore, they are not registered!
+          // We must sign them out, delete the newly created Firebase Auth account, and sign out of Google.
+          try {
+            await user.delete();
+          } catch (_) {}
+          try {
+            await _auth.signOut();
+          } catch (_) {}
+          try {
+            await _googleSignIn.signOut();
+          } catch (_) {}
+          
+          return {
+            'user': null,
+            'error': 'Email belum terdaftar. Silakan lakukan registrasi terlebih dahulu.'
+          };
+        }
+
+        // If the email is registered, but the document ID (uid) in Firestore is different from
+        // the current Google user.uid, we should check if a document exists for this uid.
         var doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
         if (!doc.exists) {
           await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
             'uid': user.uid,
             'name': user.displayName ?? '',
-            'email': user.email ?? '',
+            'email': email,
             'createdAt': FieldValue.serverTimestamp(),
             'balance': 0,
           });
@@ -70,7 +79,17 @@ class AuthService {
 
       return {'user': user, 'error': null};
     } catch (e) {
-      return {'user': null, 'error': e.toString()};
+      // In case of error (e.g. Firebase Auth exception), sign out to be safe
+      try {
+        await _auth.signOut();
+        await _googleSignIn.signOut();
+      } catch (_) {}
+      
+      String message = e.toString();
+      if (message.contains('permission-denied')) {
+        message = 'Akses ditolak. Pastikan email Anda sudah terdaftar.';
+      }
+      return {'user': null, 'error': message};
     }
   }
 
