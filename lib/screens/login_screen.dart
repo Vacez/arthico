@@ -241,10 +241,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         });
                         Map<String, dynamic> result = await _auth.signInWithGoogle();
                         if (result['user'] == null) {
-                          setState(() {
-                            error = result['error'] ?? 'Gagal login.';
-                            loading = false;
-                          });
+                          if (mounted) {
+                            setState(() {
+                              error = result['error'] ?? 'Gagal login.';
+                              loading = false;
+                            });
+                          }
                         }
                       },
                     ),

@@ -5,6 +5,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  
+  // Set to keep track of UIDs during registration to bypass Firestore check in auth stream
+  static final Set<String> _registeringUids = {};
 
   // Sign In with Google
   Future<Map<String, dynamic>> signInWithGoogle() async {
@@ -88,12 +91,17 @@ class AuthService {
 
   // Sign up with email & password
   Future<Map<String, dynamic>> signUp(String email, String password, String name) async {
+    User? user;
     try {
       final String normalizedEmail = email.trim().toLowerCase();
       UserCredential result = await _auth.createUserWithEmailAndPassword(
           email: normalizedEmail, password: password);
-      User? user = result.user;
+      user = result.user;
       
+      if (user != null) {
+        _registeringUids.add(user.uid);
+      }
+
       // Update display name
       await user?.updateDisplayName(name);
 
@@ -124,16 +132,22 @@ class AuthService {
       return {'user': null, 'error': message + ' (${e.code})'};
     } catch (e) {
       return {'user': null, 'error': e.toString()};
+    } finally {
+      if (user != null) {
+        _registeringUids.remove(user.uid);
+      }
     }
   }
 
   // Sign up with Phone Auth (links email and password)
   Future<Map<String, dynamic>> signUpWithPhone(PhoneAuthCredential credential, String email, String password, String name) async {
+    User? user;
     try {
       UserCredential result = await _auth.signInWithCredential(credential);
-      User? user = result.user;
+      user = result.user;
       
       if (user != null) {
+        _registeringUids.add(user.uid);
         final String normalizedEmail = email.trim().toLowerCase();
         // Link email and password
         AuthCredential emailCred = EmailAuthProvider.credential(email: normalizedEmail, password: password);
@@ -152,6 +166,10 @@ class AuthService {
       return {'user': user, 'error': null};
     } catch (e) {
       return {'user': null, 'error': e.toString()};
+    } finally {
+      if (user != null) {
+        _registeringUids.remove(user.uid);
+      }
     }
   }
 
@@ -248,6 +266,24 @@ class AuthService {
 
   // Auth change user stream
   Stream<User?> get user {
-    return _auth.authStateChanges();
+    return _auth.authStateChanges().asyncMap((user) async {
+      if (user == null) return null;
+
+      // If the user is currently registering, allow them through immediately
+      if (_registeringUids.contains(user.uid)) {
+        return user;
+      }
+
+      try {
+        var doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          return user;
+        } else {
+          return null;
+        }
+      } catch (_) {
+        return null;
+      }
+    });
   }
 }
