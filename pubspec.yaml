@@ -15,7 +15,7 @@ dependencies:
   fl_chart: ^1.1.1
   intl: ^0.20.2
   google_sign_in: ^6.2.2
-  email_otp: ^2.1.2
+  app_links: ^3.5.0
   pdf: ^3.10.1
   printing: ^5.10.0
   excel: ^2.1.0
