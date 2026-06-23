@@ -90,7 +90,7 @@ class AuthService {
   }
 
   // Sign up with email & password
-  Future<Map<String, dynamic>> signUp(String email, String password, String name) async {
+  Future<Map<String, dynamic>> signUp(String email, String password, String name, {String? phone}) async {
     User? user;
     try {
       final String normalizedEmail = email.trim().toLowerCase();
@@ -113,6 +113,7 @@ class AuthService {
         'uid': user?.uid,
         'name': name,
         'email': normalizedEmail,
+        'phone': phone,
         'createdAt': FieldValue.serverTimestamp(),
         'balance': 0,
       });

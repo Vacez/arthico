@@ -105,6 +105,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
             widget.email.trim(),
             widget.password,
             widget.name,
+            phone: widget.phone,
           );
 
           if (result['user'] == null) {

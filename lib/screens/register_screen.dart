@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/auth_service.dart';
 import '../providers/theme_provider.dart';
+import 'verify_otp_screen.dart';
+import 'package:email_otp/email_otp.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -11,7 +12,6 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final AuthService _auth = AuthService();
   final _formKey = GlobalKey<FormState>();
 
   String name = '';
@@ -225,26 +225,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               });
                               
                               try {
-                                final res = await _auth.signUp(email, password, name);
-                                if (res['user'] != null) {
-                                  setState(() { loading = false; });
+                                // Initialize Email OTP
+                                EmailOTP emailAuth = EmailOTP();
+                                emailAuth.setConfig(
+                                  appEmail: "support@arthico.com",
+                                  appName: "Arthico",
+                                  userEmail: email.trim(),
+                                  otpLength: 6,
+                                  otpType: OTPType.digitsOnly,
+                                );
+
+                                bool otpSent = await emailAuth.sendOTP();
+                                setState(() {
+                                  loading = false;
+                                });
+
+                                if (otpSent) {
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('✅ Registrasi berhasil! Tautan verifikasi telah dikirim ke email Anda.'),
-                                        backgroundColor: Colors.green,
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => VerifyOtpScreen(
+                                          name: name,
+                                          email: email.trim(),
+                                          phone: phone,
+                                          otpMethod: 'email',
+                                          password: password,
+                                          authInstance: emailAuth,
+                                        ),
                                       ),
                                     );
                                   }
                                 } else {
                                   setState(() {
-                                    error = res['error'] ?? 'Registrasi gagal.';
-                                    loading = false;
+                                    error = 'Gagal mengirim kode OTP ke email. Silakan periksa kembali email Anda.';
                                   });
                                 }
                               } catch (e) {
                                 setState(() {
-                                  error = e.toString();
+                                  error = 'Terjadi kesalahan: ${e.toString()}';
                                   loading = false;
                                 });
                               }
