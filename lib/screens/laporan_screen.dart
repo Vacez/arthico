@@ -719,8 +719,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 children: [
                   pw.Text('LAPORAN NERACA KEUANGAN', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
                   pw.SizedBox(height: 4),
-                  pw.Text('Saudara/i $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  pw.Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
+                  pw.Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                   pw.Text('(dalam Rupiah)', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
                 ],
               ),
@@ -877,8 +877,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
               child: pw.Column(
                 children: [
                   pw.Text('LAPORAN LABA RUGI', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Saudara/i $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
+                  pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
+                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                 ],
               ),
             ),
@@ -971,8 +971,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
               child: pw.Column(
                 children: [
                   pw.Text('BUKU BESAR KEUANGAN', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Saudara/i $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 12)),
+                  pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
+                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                 ],
               ),
             ),
@@ -1080,8 +1080,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 children: [
                   pw.Text('LAPORAN ARUS KAS', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
                   pw.SizedBox(height: 4),
-                  pw.Text('Saudara/i $userName', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
+                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                 ],
               ),
             ),
@@ -1171,8 +1171,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
               child: pw.Text('Laporan Keuangan', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
             ),
             pw.SizedBox(height: 10),
-            pw.Text('Saudara/i $userName', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-            pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 14)),
+            pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 12, color: PdfColors.grey900)),
+            pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 10, color: PdfColors.grey600)),
             pw.SizedBox(height: 20),
             if (transactionsData.isEmpty)
               pw.Text('Tidak ada transaksi pada periode ini.', style: const pw.TextStyle(fontSize: 12))
