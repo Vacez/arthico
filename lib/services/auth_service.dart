@@ -117,6 +117,9 @@ class AuthService {
         'createdAt': FieldValue.serverTimestamp(),
         'balance': 0,
       });
+
+      // Sign out immediately so they don't automatically log in on successful registration
+      await _auth.signOut();
       
       return {'user': user, 'error': null};
     } on FirebaseAuthException catch (e) {
@@ -180,7 +183,22 @@ class AuthService {
       final String normalizedEmail = email.trim().toLowerCase();
       UserCredential result = await _auth.signInWithEmailAndPassword(
           email: normalizedEmail, password: password);
-      return {'user': result.user, 'error': null};
+      
+      User? user = result.user;
+      if (user != null && !user.emailVerified) {
+        // Automatically resend verification email if not verified
+        try {
+          await user.sendEmailVerification();
+        } catch (_) {}
+
+        await _auth.signOut();
+        return {
+          'user': null,
+          'error': 'Email Anda belum diverifikasi. Tautan verifikasi baru telah dikirimkan ke email Anda. Silakan periksa inbox/spam.'
+        };
+      }
+
+      return {'user': user, 'error': null};
     } on FirebaseAuthException catch (e) {
       String message = 'Gagal login';
       if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
@@ -269,6 +287,19 @@ class AuthService {
   Stream<User?> get user {
     return _auth.authStateChanges().asyncMap((user) async {
       if (user == null) return null;
+
+      // Check if email is verified for email-password users
+      bool isEmailPasswordUser = false;
+      for (var profile in user.providerData) {
+        if (profile.providerId == 'password') {
+          isEmailPasswordUser = true;
+          break;
+        }
+      }
+
+      if (isEmailPasswordUser && !user.emailVerified) {
+        return null;
+      }
 
       // If the user is currently registering, allow them through immediately
       if (_registeringUids.contains(user.uid)) {

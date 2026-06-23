@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
-import 'verify_otp_screen.dart';
-import 'package:email_otp/email_otp.dart';
+import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -225,40 +224,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               });
                               
                               try {
-                                // Initialize Email OTP
-                                EmailOTP emailAuth = EmailOTP();
-                                emailAuth.setConfig(
-                                  appEmail: "support@arthico.com",
-                                  appName: "Arthico",
-                                  userEmail: email.trim(),
-                                  otpLength: 6,
-                                  otpType: OTPType.digitsOnly,
-                                );
-
-                                bool otpSent = await emailAuth.sendOTP();
+                                final AuthService auth = AuthService();
+                                final res = await auth.signUp(email, password, name, phone: phone);
+                                
                                 setState(() {
                                   loading = false;
                                 });
 
-                                if (otpSent) {
+                                if (res['user'] != null) {
                                   if (mounted) {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => VerifyOtpScreen(
-                                          name: name,
-                                          email: email.trim(),
-                                          phone: phone,
-                                          otpMethod: 'email',
-                                          password: password,
-                                          authInstance: emailAuth,
-                                        ),
-                                      ),
+                                    showDialog(
+                                      context: context,
+                                      barrierDismissible: false,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          title: const Row(
+                                            children: [
+                                              Icon(Icons.email_outlined, color: Color(0xFF818CF8)),
+                                              SizedBox(width: 8),
+                                              Text('Verifikasi Email'),
+                                            ],
+                                          ),
+                                          content: const Text(
+                                            'Pendaftaran berhasil! ✉️\n\n'
+                                            'Tautan verifikasi telah dikirim ke email Anda. '
+                                            'Silakan periksa kotak masuk (atau folder spam/junk) email Anda '
+                                            'dan klik tautan tersebut untuk memverifikasi akun sebelum masuk.',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () {
+                                                Navigator.of(context).pop(); // close dialog
+                                                Navigator.of(context).pop(); // go back to login screen
+                                              },
+                                              child: const Text('OK', style: TextStyle(color: Color(0xFF818CF8))),
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     );
                                   }
                                 } else {
                                   setState(() {
-                                    error = 'Gagal mengirim kode OTP ke email. Silakan periksa kembali email Anda.';
+                                    error = res['error'] ?? 'Registrasi gagal.';
                                   });
                                 }
                               } catch (e) {
