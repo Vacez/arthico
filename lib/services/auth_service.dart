@@ -9,6 +9,11 @@ class AuthService {
   // Sign In with Google
   Future<Map<String, dynamic>> signInWithGoogle() async {
     try {
+      // Force account selection by signing out of Google first
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+      
       // Trigger the authentication flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
@@ -196,6 +201,9 @@ class AuthService {
   // Sign out
   Future signOut() async {
     try {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
       return await _auth.signOut();
     } catch (e) {
       print(e.toString());

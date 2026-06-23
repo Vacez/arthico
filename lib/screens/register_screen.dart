@@ -274,48 +274,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
-                    const SizedBox(height: 24.0),
-                    Row(
-                      children: [
-                        Expanded(child: Divider(color: theme.border)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text('ATAU', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                        ),
-                        Expanded(child: Divider(color: theme.border)),
-                      ],
-                    ),
-                    const SizedBox(height: 24.0),
-                    // Google Sign In Button
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(color: theme.border),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: Icon(Icons.g_mobiledata, color: theme.textPrimary, size: 28),
-                      label: Text(
-                        'Daftar dengan Google',
-                        style: TextStyle(color: theme.textPrimary, fontSize: 16),
-                      ),
-                      onPressed: () async {
-                        setState(() {
-                          loading = true;
-                          error = '';
-                        });
-                        Map<String, dynamic> result = await _auth.signInWithGoogle();
-                        if (result['user'] == null) {
-                          setState(() {
-                            error = result['error'] ?? 'Gagal mendaftar dengan Google.';
-                            loading = false;
-                          });
-                        } else {
-                          if (mounted) Navigator.pop(context);
-                        }
-                      },
-                    ),
                     const SizedBox(height: 32.0),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
