@@ -32,11 +32,17 @@ class _LaporanScreenState extends State<LaporanScreen> {
   final GlobalKey _chartKey = GlobalKey();
   bool _isWeekly = false; // true for weekly view, false for monthly
   String _selectedReportType = 'Ringkasan'; // 'Ringkasan', 'Neraca', 'Laba Rugi', 'Buku Besar', 'Arus Kas'
+  late Stream<QuerySnapshot> _goalsStream;
+  late Stream<QuerySnapshot> _fixedExpensesStream;
+  late Stream<QuerySnapshot> _transactionsStream;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = widget.initialDate ?? DateTime.now();
+    _goalsStream = _dbService.getGoals();
+    _fixedExpensesStream = _dbService.getFixedExpenses();
+    _transactionsStream = _dbService.getAllTransactions();
   }
 
   @override
@@ -44,7 +50,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
     final theme = Provider.of<ThemeProvider>(context);
     
     return StreamBuilder<QuerySnapshot>(
-      stream: _dbService.getGoals(),
+      stream: _goalsStream,
       builder: (context, goalsSnapshot) {
         double totalSavings = 0;
         List<QueryDocumentSnapshot> goalsList = [];
@@ -56,7 +62,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         }
 
         return StreamBuilder<QuerySnapshot>(
-          stream: _dbService.getFixedExpenses(),
+          stream: _fixedExpensesStream,
           builder: (context, fixedExpensesSnapshot) {
             List<QueryDocumentSnapshot> fixedExpensesList = [];
             if (fixedExpensesSnapshot.hasData) {
@@ -64,7 +70,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
             }
 
             return StreamBuilder<QuerySnapshot>(
-              stream: _dbService.getAllTransactions(),
+              stream: _transactionsStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
@@ -692,20 +698,24 @@ class _LaporanScreenState extends State<LaporanScreen> {
       }
       
       double totalGoalsAmount = goalsSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['currentAmount'] ?? 0) as num).toDouble());
-      double shortTermLiabilities = fixedExpensesSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
+      double shortTermLiabilities = fixedExpensesSnapshot.docs
+          .where((doc) => !(doc.data()['isPaid'] ?? false) && ((doc.data()['tenorMonths'] ?? 0) as num).toInt() < 1)
+          .fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
+      double longTermLiabilities = fixedExpensesSnapshot.docs
+          .where((doc) => !(doc.data()['isPaid'] ?? false) && ((doc.data()['tenorMonths'] ?? 0) as num).toInt() >= 1)
+          .fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
       
-      double personalHouse = 500000000;
-      double personalCar = 120000000;
-      double carLoan = 80000000;
-      double mortgage = 350000000;
+      double personalHouse = 0;
+      double personalCar = 0;
+      double carLoan = longTermLiabilities;
       
       double totalLiquid = cashBalance;
       double totalInvest = totalGoalsAmount;
       double totalPersonal = personalHouse + personalCar;
       double totalAssets = totalLiquid + totalInvest + totalPersonal;
       
-      double totalShort = shortTermLiabilities + 5000000;
-      double totalLong = carLoan + mortgage;
+      double totalShort = shortTermLiabilities;
+      double totalLong = carLoan;
       double totalLiabilities = totalShort + totalLong;
       double netWorth = totalAssets - totalLiabilities;
 
@@ -770,15 +780,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       pdfNeracaSubtotalRow('Total Aset Investasi', formatCurrencyPdf(totalInvest)),
                       pw.SizedBox(height: 10),
                       
-                      // Aset Pribadi
-                      pw.Text('Aset Penggunaan Pribadi (Estimasi)', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
-                      pw.SizedBox(height: 4),
-                      pdfNeracaRow('Rumah Pribadi', formatCurrencyPdf(personalHouse)),
-                      pdfNeracaRow('Kendaraan / Mobil', formatCurrencyPdf(personalCar)),
-                      pdfNeracaSubtotalRow('Total Aset Pribadi', formatCurrencyPdf(totalPersonal)),
-                      pw.SizedBox(height: 20),
-                      
                       // Total Aset
+                      pw.SizedBox(height: 10),
                       pdfNeracaTotalRow('TOTAL ASET', formatCurrencyPdf(totalAssets)),
                     ],
                   ),
@@ -806,16 +809,14 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       // Kewajiban Jangka Pendek
                       pw.Text('Kewajiban Jangka Pendek', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
                       pw.SizedBox(height: 4),
-                      pdfNeracaRow('List Kebutuhan Bulanan', formatCurrencyPdf(shortTermLiabilities)),
-                      pdfNeracaRow('Kartu Kredit (Mock)', formatCurrencyPdf(5000000)),
+                      pdfNeracaRow('Kebutuhan Jk. Pendek', formatCurrencyPdf(shortTermLiabilities)),
                       pdfNeracaSubtotalRow('Total Kewajiban Jangka Pendek', formatCurrencyPdf(totalShort)),
                       pw.SizedBox(height: 10),
                       
                       // Kewajiban Jangka Panjang
                       pw.Text('Kewajiban Jangka Panjang', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
                       pw.SizedBox(height: 4),
-                      pdfNeracaRow('Kredit Mobil (Mock)', formatCurrencyPdf(carLoan)),
-                      pdfNeracaRow('Pinjaman Hipotek (Mock)', formatCurrencyPdf(mortgage)),
+                      pdfNeracaRow('Kebutuhan Jk. Panjang', formatCurrencyPdf(carLoan)),
                       pdfNeracaSubtotalRow('Total Kewajiban Jangka Panjang', formatCurrencyPdf(totalLong)),
                       pdfNeracaSubtotalRow('Total Kewajiban', formatCurrencyPdf(totalLiabilities)),
                       pw.SizedBox(height: 10),
@@ -1247,15 +1248,19 @@ class _LaporanScreenState extends State<LaporanScreen> {
       }
 
       double totalGoalsAmount = goalsSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['currentAmount'] ?? 0) as num).toDouble());
-      double shortTermLiabilities = fixedExpensesSnapshot.docs.fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
+      double shortTermLiabilities = fixedExpensesSnapshot.docs
+          .where((doc) => !(doc.data()['isPaid'] ?? false) && ((doc.data()['tenorMonths'] ?? 0) as num).toInt() < 1)
+          .fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
+      double longTermLiabilities = fixedExpensesSnapshot.docs
+          .where((doc) => !(doc.data()['isPaid'] ?? false) && ((doc.data()['tenorMonths'] ?? 0) as num).toInt() >= 1)
+          .fold(0, (sum, doc) => sum + ((doc.data()['amount'] ?? 0) as num).toDouble());
 
-      double personalHouse = 500000000;
-      double personalCar = 120000000;
-      double carLoan = 80000000;
-      double mortgage = 350000000;
+      double personalHouse = 0;
+      double personalCar = 0;
+      double carLoan = longTermLiabilities;
 
       double totalAssets = cashBalance + totalGoalsAmount + personalHouse + personalCar;
-      double totalLiabilities = shortTermLiabilities + 5000000 + carLoan + mortgage;
+      double totalLiabilities = shortTermLiabilities + carLoan;
       double netWorth = totalAssets - totalLiabilities;
 
       sheet.appendRow(["LAPORAN NERACA KEUANGAN"]);
@@ -1265,9 +1270,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
       sheet.appendRow(["ASET", "NILAI", "KEWAJIBAN & EKUITAS", "NILAI"]);
       
       sheet.appendRow(["Kas / Setara Kas", "", "Kewajiban Jangka Pendek", ""]);
-      sheet.appendRow(["  Kas Utama / Saldo Dompet", cashBalance, "  List Kebutuhan Bulanan", shortTermLiabilities]);
-      sheet.appendRow(["", "", "  Kartu Kredit (Mock)", 5000000]);
-      sheet.appendRow(["Total Kas & Setara Kas", cashBalance, "Total Kewajiban Jk. Pendek", shortTermLiabilities + 5000000]);
+      sheet.appendRow(["  Kas Utama / Saldo Dompet", cashBalance, "  Kebutuhan Jk. Pendek", shortTermLiabilities]);
+      sheet.appendRow(["Total Kas & Setara Kas", cashBalance, "Total Kewajiban Jk. Pendek", shortTermLiabilities]);
       sheet.appendRow([]);
       sheet.appendRow(["Aset Investasi", "", "Kewajiban Jangka Panjang", ""]);
       
@@ -1275,13 +1279,11 @@ class _LaporanScreenState extends State<LaporanScreen> {
         sheet.appendRow(["  Tabungan: ${doc.data()['title']}", doc.data()['currentAmount'] ?? 0, "", ""]);
       }
       
-      sheet.appendRow(["Total Aset Investasi", totalGoalsAmount, "  Kredit Mobil (Mock)", carLoan]);
-      sheet.appendRow(["", "", "  Pinjaman Hipotek (Mock)", mortgage]);
-      sheet.appendRow(["", "", "Total Kewajiban Jk. Panjang", carLoan + mortgage]);
-      sheet.appendRow(["Aset Penggunaan Pribadi", "", "TOTAL KEWAJIBAN", totalLiabilities]);
-      sheet.appendRow(["  Rumah Pribadi", personalHouse, "KEKAYAAN BERSIH", ""]);
-      sheet.appendRow(["  Kendaraan / Mobil", personalCar, "  Nilai Kekayaan Bersih (Ekuitas)", netWorth]);
-      sheet.appendRow(["Total Aset Pribadi", personalHouse + personalCar, "", ""]);
+      sheet.appendRow(["Total Aset Investasi", totalGoalsAmount, "  Kebutuhan Jk. Panjang", carLoan]);
+      sheet.appendRow(["", "", "Total Kewajiban Jk. Panjang", carLoan]);
+      sheet.appendRow(["", "", "TOTAL KEWAJIBAN", totalLiabilities]);
+      sheet.appendRow(["", "", "KEKAYAAN BERSIH", ""]);
+      sheet.appendRow(["", "", "  Nilai Kekayaan Bersih (Ekuitas)", netWorth]);
       sheet.appendRow([]);
       sheet.appendRow(["TOTAL ASET", totalAssets, "TOTAL HUTANG & KEKAYAAN BERSIH", totalAssets]);
 
@@ -1621,24 +1623,31 @@ class _LaporanScreenState extends State<LaporanScreen> {
     double cashBalance = sisa;
     double totalGoalsAmount = goalsList.fold(0, (sum, doc) => sum + ((doc['currentAmount'] ?? 0) as num).toDouble());
     
-    // Real short-term liabilities (fixed expenses total)
-    double shortTermLiabilities = fixedExpensesList.fold(0, (sum, doc) => sum + ((doc['amount'] ?? 0) as num).toDouble());
+    // Real short-term liabilities (only unpaid/PENDING fixed expenses and tenor < 1)
+    double shortTermLiabilities = fixedExpensesList
+        .where((doc) => !(doc['isPaid'] ?? false) && ((doc['tenorMonths'] ?? 0) as num).toInt() < 1)
+        .fold(0, (sum, doc) => sum + ((doc['amount'] ?? 0) as num).toDouble());
+
+    // Real long-term liabilities (only unpaid/PENDING fixed expenses and tenor >= 1)
+    double longTermLiabilities = fixedExpensesList
+        .where((doc) => !(doc['isPaid'] ?? false) && ((doc['tenorMonths'] ?? 0) as num).toInt() >= 1)
+        .fold(0, (sum, doc) => sum + ((doc['amount'] ?? 0) as num).toDouble());
 
     // Mock assets (for traditional neraca balance matching layout)
-    double personalHouse = 500000000;
-    double personalCar = 120000000;
+    double personalHouse = 0;
+    double personalCar = 0;
     
     // Mock long-term liabilities
-    double carLoan = 80000000;
-    double mortgage = 350000000;
+    double carLoan = longTermLiabilities;
+    double mortgage = 0;
 
     double totalLiquidAssets = cashBalance;
     double totalInvestments = totalGoalsAmount;
     double totalPersonalAssets = personalHouse + personalCar;
     double totalAssets = totalLiquidAssets + totalInvestments + totalPersonalAssets;
 
-    double totalShortTerm = shortTermLiabilities + 5000000; // adding 5jt mock CC
-    double totalLongTerm = carLoan + mortgage;
+    double totalShortTerm = shortTermLiabilities; // remove mock CC
+    double totalLongTerm = carLoan; // which is longTermLiabilities
     double totalLiabilities = totalShortTerm + totalLongTerm;
     double netWorth = totalAssets - totalLiabilities;
 
@@ -1717,12 +1726,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
           ...goalsList.map((doc) => _neracaRow('Tabungan: ${doc['title']}', ((doc['currentAmount'] ?? 0) as num).toDouble())),
         _neracaSubtotalRow('Total Aset Investasi', totalInvest),
         const SizedBox(height: 12),
-        // Personal Assets
-        const Text('Aset Penggunaan Pribadi (Estimasi)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
-        const SizedBox(height: 4),
-        _neracaRow('Rumah Pribadi', 500000000),
-        _neracaRow('Kendaraan / Mobil', 120000000),
-        _neracaSubtotalRow('Total Aset Pribadi', totalPersonal),
         const SizedBox(height: 20),
         _neracaTotalRow('TOTAL ASET', totalAssets),
       ],
@@ -1743,15 +1746,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
         // Short-term Liabilities
         const Text('Kewajiban Jangka Pendek', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
         const SizedBox(height: 4),
-        _neracaRow('List Kebutuhan Bulanan', shortTermFixed),
-        _neracaRow('Kartu Kredit (Mock)', 5000000),
+        _neracaRow('Kebutuhan Jk. Pendek', shortTermFixed),
         _neracaSubtotalRow('Total Kewajiban Jangka Pendek', totalShort),
         const SizedBox(height: 12),
         // Long-term Liabilities
         const Text('Kewajiban Jangka Panjang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline)),
         const SizedBox(height: 4),
-        _neracaRow('Kredit Mobil (Mock)', carLoan),
-        _neracaRow('Pinjaman Hipotek (Mock)', mortgage),
+        _neracaRow('Kebutuhan Jk. Panjang', carLoan),
         _nerSubtotalRow('Total Kewajiban Jangka Panjang', totalLong),
         const SizedBox(height: 12),
         _nerSubtotalRow('Total Hutang / Kewajiban', totalLiab),

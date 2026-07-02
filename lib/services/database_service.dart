@@ -240,20 +240,23 @@ class DatabaseService {
   Future<void> addFixedExpense({
     required String title,
     required double amount,
+    int tenorMonths = 0,
   }) async {
     await _db.collection('users').doc(uid).collection('fixed_expenses').add({
       'title': title,
       'amount': amount,
       'isPaid': false,
+      'tenorMonths': tenorMonths,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
 
   // Update fixed expense
-  Future<void> updateFixedExpense(String id, String title, double amount) async {
+  Future<void> updateFixedExpense(String id, String title, double amount, int tenorMonths) async {
     await _db.collection('users').doc(uid).collection('fixed_expenses').doc(id).update({
       'title': title,
       'amount': amount,
+      'tenorMonths': tenorMonths,
     });
   }
 

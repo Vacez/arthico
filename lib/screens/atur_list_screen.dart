@@ -19,6 +19,7 @@ class _AturListScreenState extends State<AturListScreen> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   String? _editingId;
+  int _selectedTenorMonths = 0;
 
   @override
   void dispose() {
@@ -32,6 +33,7 @@ class _AturListScreenState extends State<AturListScreen> {
       _titleController.clear();
       _amountController.clear();
       _editingId = null;
+      _selectedTenorMonths = 0;
     });
   }
 
@@ -44,12 +46,14 @@ class _AturListScreenState extends State<AturListScreen> {
       await _dbService.addFixedExpense(
         title: _titleController.text,
         amount: amount,
+        tenorMonths: _selectedTenorMonths,
       );
     } else {
       await _dbService.updateFixedExpense(
         _editingId!,
         _titleController.text,
         amount,
+        _selectedTenorMonths,
       );
     }
     _resetForm();
@@ -114,6 +118,34 @@ class _AturListScreenState extends State<AturListScreen> {
                       enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
                       focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    value: _selectedTenorMonths,
+                    dropdownColor: theme.card,
+                    style: TextStyle(color: theme.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'Tenor / Jangka Waktu',
+                      labelStyle: TextStyle(color: theme.textSecondary),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text('Kurang dari 1 bulan (Jangka Pendek)')),
+                      DropdownMenuItem(value: 1, child: Text('1 Bulan (Jangka Panjang)')),
+                      DropdownMenuItem(value: 3, child: Text('3 Bulan (Jangka Panjang)')),
+                      DropdownMenuItem(value: 6, child: Text('6 Bulan (Jangka Panjang)')),
+                      DropdownMenuItem(value: 12, child: Text('12 Bulan (Jangka Panjang)')),
+                      DropdownMenuItem(value: 24, child: Text('24 Bulan (Jangka Panjang)')),
+                      DropdownMenuItem(value: 36, child: Text('36 Bulan atau lebih (Jangka Panjang)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _selectedTenorMonths = val;
+                        });
+                      }
+                    },
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -196,6 +228,10 @@ class _AturListScreenState extends State<AturListScreen> {
                             String title = doc['title'] ?? '';
                             double amount = (doc['amount'] ?? 0).toDouble();
                             bool isPaid = doc['isPaid'] ?? false;
+                            int tenor = 0;
+                            try {
+                              tenor = ((doc['tenorMonths'] ?? 0) as num).toInt();
+                            } catch (_) {}
 
                             return Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -212,19 +248,31 @@ class _AturListScreenState extends State<AturListScreen> {
                                       children: [
                                         Text(title, style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                                         const SizedBox(height: 4),
-                                        Row(
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 4,
+                                          crossAxisAlignment: WrapCrossAlignment.center,
                                           children: [
-                                            Container(
-                                              width: 6,
-                                              height: 6,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: isPaid ? Colors.green : Colors.orange,
-                                              ),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  width: 6,
+                                                  height: 6,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    color: isPaid ? Colors.green : Colors.orange,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(isPaid ? 'LUNAS' : 'PENDING', 
+                                                  style: TextStyle(color: isPaid ? Colors.green : Colors.orange, fontSize: 9, fontWeight: FontWeight.bold)),
+                                              ],
                                             ),
-                                            const SizedBox(width: 4),
-                                            Text(isPaid ? 'LUNAS' : 'PENDING', 
-                                              style: TextStyle(color: isPaid ? Colors.green : Colors.orange, fontSize: 9, fontWeight: FontWeight.bold)),
+                                            Text(
+                                              tenor == 0 ? '• Jk. Pendek' : '• Tenor: $tenor Bln',
+                                              style: TextStyle(color: theme.textSecondary, fontSize: 9),
+                                            ),
                                           ],
                                         ),
                                       ],
@@ -264,14 +312,15 @@ class _AturListScreenState extends State<AturListScreen> {
                                             style: TextStyle(color: isPaid ? Colors.orange : Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                         ),
                                         const SizedBox(width: 8),
-                                        GestureDetector(
-                                          onTap: () {
-                                            setState(() {
-                                              _editingId = id;
-                                              _titleController.text = title;
-                                              _amountController.text = amount.toString();
-                                            });
-                                          },
+                                         GestureDetector(
+                                           onTap: () {
+                                             setState(() {
+                                               _editingId = id;
+                                               _titleController.text = title;
+                                               _amountController.text = amount.toString();
+                                               _selectedTenorMonths = tenor;
+                                             });
+                                           },
                                           child: const Text('Edit', style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                         ),
                                         const SizedBox(width: 8),
