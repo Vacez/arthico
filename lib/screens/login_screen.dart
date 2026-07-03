@@ -21,6 +21,151 @@ class _LoginScreenState extends State<LoginScreen> {
   bool loading = false;
   bool _obscurePassword = true;
 
+  void _showForgotPasswordDialog(BuildContext context, {String initialEmail = ''}) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final emailController = TextEditingController(text: initialEmail);
+    final dialogFormKey = GlobalKey<FormState>();
+    bool dialogLoading = false;
+    String dialogError = '';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: theme.card,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Icon(Icons.lock_reset, color: theme.accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Reset Kata Sandi',
+                    style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              content: Form(
+                key: dialogFormKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Masukkan email Anda untuk menerima tautan pemulihan kata sandi.',
+                      style: TextStyle(color: theme.textSecondary, fontSize: 13),
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: emailController,
+                      style: TextStyle(color: theme.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'email@gmail.com',
+                        hintStyle: TextStyle(color: theme.textMuted),
+                        fillColor: theme.inputBg,
+                        filled: true,
+                        prefixIcon: Icon(Icons.email_outlined, color: theme.textMuted),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: theme.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: theme.accent, width: 2),
+                        ),
+                      ),
+                      validator: (val) {
+                        if (val == null || val.isEmpty) return 'Masukkan email';
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(val)) {
+                          return 'Format email tidak valid';
+                        }
+                        return null;
+                      },
+                    ),
+                    if (dialogError.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        dialogError,
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ]
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: dialogLoading ? null : () => Navigator.pop(context),
+                  child: Text('Batal', style: TextStyle(color: theme.textSecondary)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.accent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: dialogLoading
+                      ? null
+                      : () async {
+                          if (dialogFormKey.currentState!.validate()) {
+                            setDialogState(() {
+                              dialogLoading = true;
+                              dialogError = '';
+                            });
+                            final res = await _auth.sendPasswordResetEmail(emailController.text.trim());
+                            if (res['success'] == true) {
+                              if (mounted) {
+                                Navigator.pop(context); // Close input dialog
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    backgroundColor: theme.card,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    title: Row(
+                                      children: [
+                                        const Icon(Icons.mark_email_read_outlined, color: Colors.green),
+                                        const SizedBox(width: 8),
+                                        Text('Email Terkirim', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    content: Text(
+                                      'Tautan reset kata sandi telah dikirim ke email Anda. Silakan periksa inbox/spam email Anda.',
+                                      style: TextStyle(color: theme.textSecondary),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: Text('OK', style: TextStyle(color: theme.accent, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                            } else {
+                              setDialogState(() {
+                                dialogLoading = false;
+                                dialogError = res['error'] ?? 'Gagal mengirim email reset.';
+                              });
+                            }
+                          }
+                        },
+                  child: dialogLoading
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text('Kirim Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
@@ -148,7 +293,22 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: (val) => val!.isEmpty ? 'Masukkan password' : null,
                       onChanged: (val) => setState(() => password = val),
                     ),
-                    const SizedBox(height: 24.0),
+                    const SizedBox(height: 10.0),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: () => _showForgotPasswordDialog(context, initialEmail: email),
+                        child: Text(
+                          'Lupa Kata Sandi?',
+                          style: TextStyle(
+                            color: theme.accent,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20.0),
                     // Gradient Button
                     Container(
                       decoration: BoxDecoration(
@@ -200,13 +360,33 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
                     ),
-                    if (error.isNotEmpty) ...[
+                     if (error.isNotEmpty) ...[
                       const SizedBox(height: 12.0),
                       Text(
                         error,
                         style: const TextStyle(color: Colors.redAccent, fontSize: 13.0),
                         textAlign: TextAlign.center,
                       ),
+                      if (error.toLowerCase().contains('salah') || 
+                          error.toLowerCase().contains('tidak ditemukan') || 
+                          error.toLowerCase().contains('kredensial') || 
+                          error.toLowerCase().contains('gagal')) ...[
+                        const SizedBox(height: 8.0),
+                        GestureDetector(
+                          onTap: () => _showForgotPasswordDialog(context, initialEmail: email),
+                          child: Text(
+                            'Lupa Kata Sandi?',
+                            style: TextStyle(
+                              color: theme.accent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14.0,
+                              decoration: TextDecoration.underline,
+                              decorationColor: theme.accent,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ],
                     const SizedBox(height: 24.0),
                     Row(

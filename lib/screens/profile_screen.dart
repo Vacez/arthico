@@ -98,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+             TextField(
               controller: _currentPasswordController,
               obscureText: true,
               style: TextStyle(color: theme.textPrimary),
@@ -107,6 +107,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 labelStyle: TextStyle(color: theme.textSecondary),
                 enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
                 focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () async {
+                  if (user?.email == null) return;
+                  Navigator.pop(context); // Close Change Password Dialog
+                  
+                  // Show loading dialog
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(child: CircularProgressIndicator()),
+                  );
+                  
+                  final res = await _auth.sendPasswordResetEmail(user!.email!);
+                  
+                  if (mounted) {
+                    Navigator.pop(context); // Close loading dialog
+                    
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: theme.card,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: Row(
+                          children: [
+                            Icon(
+                              res['success'] == true ? Icons.mark_email_read_outlined : Icons.error_outline,
+                              color: res['success'] == true ? Colors.green : Colors.redAccent,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              res['success'] == true ? 'Email Terkirim' : 'Gagal',
+                              style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        content: Text(
+                          res['success'] == true
+                              ? 'Tautan reset kata sandi telah dikirim ke email Anda (${user!.email}). Silakan periksa inbox/spam email Anda.'
+                              : res['error'] ?? 'Terjadi kesalahan saat mengirim email reset.',
+                          style: TextStyle(color: theme.textSecondary),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text('OK', style: TextStyle(color: theme.accent, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
+                child: Text(
+                  'Lupa Kata Sandi?',
+                  style: TextStyle(
+                    color: theme.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),

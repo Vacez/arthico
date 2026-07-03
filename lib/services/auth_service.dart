@@ -270,6 +270,26 @@ class AuthService {
     }
   }
 
+  // Send password reset email
+  Future<Map<String, dynamic>> sendPasswordResetEmail(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
+      return {'success': true, 'error': null};
+    } on FirebaseAuthException catch (e) {
+      String message = 'Gagal mengirim email reset password';
+      if (e.code == 'user-not-found') {
+        message = 'Email tidak terdaftar';
+      } else if (e.code == 'invalid-email') {
+        message = 'Format email tidak valid';
+      } else {
+        message = '$message (${e.message ?? e.code})';
+      }
+      return {'success': false, 'error': message};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   // Sign out
   Future signOut() async {
     try {
