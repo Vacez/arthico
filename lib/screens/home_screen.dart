@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
+import 'dart:convert';
 
 import '../services/database_service.dart';
 import 'package:intl/intl.dart';
@@ -28,6 +29,12 @@ class _HomeScreenState extends State<HomeScreen> {
   int _activeScreenIndex = 0;
   late PageController _pageController;
 
+  // Cached Stream variables to prevent rebuilds
+  late Stream<DocumentSnapshot> _userDataStream;
+  late Stream<QuerySnapshot> _allTransactionsStream;
+  late Stream<QuerySnapshot> _fixedExpensesStream;
+  late Stream<QuerySnapshot> _recentTransactionsStream;
+
   // Form State
   String _selectedType = 'Pengeluaran';
   String _selectedCategory = 'Makan';
@@ -46,12 +53,19 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
+    _userDataStream = _dbService.getUserData();
+    _allTransactionsStream = _dbService.getAllTransactions();
+    _fixedExpensesStream = _dbService.getFixedExpenses();
+    _recentTransactionsStream = _dbService.getRecentTransactions();
     _listenToCategories();
+    _dbService.checkAndProcessAutoPayments();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _amountController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
@@ -189,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   SingleChildScrollView(child: _buildDashboardContent()),
                   SingleChildScrollView(child: GoalsScreen()),
                   SingleChildScrollView(child: LaporanScreen(initialDate: _selectedDate)),
-                  SingleChildScrollView(child: ProfileScreen()),
+                  SingleChildScrollView(child: ProfileScreen(onNavigateToDashboard: () => _goToPage(0))),
                 ],
               ),
             ),
@@ -210,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDashboardContent() {
     return StreamBuilder<DocumentSnapshot>(
-      stream: _dbService.getUserData(),
+      stream: _userDataStream,
       builder: (context, userSnapshot) {
         if (userSnapshot.hasError) {
           return Center(child: Text('Error: ${userSnapshot.error}', style: const TextStyle(color: Colors.red)));
@@ -302,14 +316,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () => _goToPage(3),
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: const Color(0xFF10B981),
-                  child: Text(user?.displayName?.substring(0, 1).toUpperCase() ?? 'A',
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
+              StreamBuilder<DocumentSnapshot>(
+                stream: _userDataStream,
+                builder: (context, snapshot) {
+                  String? photoUrl;
+                  String displayName = user?.displayName ?? 'User';
+                  
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>?;
+                    if (data != null) {
+                      photoUrl = data['photoUrl'];
+                      displayName = data['name'] ?? displayName;
+                    }
+                  }
+
+                  return GestureDetector(
+                    onTap: () => _goToPage(3),
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: const Color(0xFF10B981),
+                      backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                          ? MemoryImage(base64Decode(photoUrl))
+                          : null,
+                      child: photoUrl != null && photoUrl.isNotEmpty
+                          ? null
+                          : Text(
+                              displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : 'A',
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -479,7 +516,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSummaryCards(double totalBalance) {
     return StreamBuilder<QuerySnapshot>(
-      stream: _dbService.getAllTransactions(),
+      stream: _allTransactionsStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) return Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red, fontSize: 10));
         
@@ -606,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isMobile = MediaQuery.of(context).size.width < 600;
     
     return StreamBuilder<QuerySnapshot>(
-      stream: _dbService.getFixedExpenses(),
+      stream: _fixedExpensesStream,
       builder: (context, snapshot) {
         double totalBeban = 0;
         if (snapshot.hasData) {
@@ -1013,7 +1050,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildChartArea() {
     final theme = Provider.of<ThemeProvider>(context);
     return StreamBuilder<QuerySnapshot>(
-      stream: _dbService.getAllTransactions(),
+      stream: _allTransactionsStream,
       builder: (context, snapshot) {
         List<BarChartGroupData> barGroups = [];
         Map<String, double> incomeMap = {};
@@ -1230,7 +1267,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Text('Aktivitas Terbaru', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           StreamBuilder<QuerySnapshot>(
-            stream: _dbService.getRecentTransactions(),
+            stream: _recentTransactionsStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -1283,7 +1320,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHabitBanner() {
     final theme = Provider.of<ThemeProvider>(context);
     return StreamBuilder<QuerySnapshot>(
-      stream: _dbService.getAllTransactions(),
+      stream: _allTransactionsStream,
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const SizedBox.shrink();

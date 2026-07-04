@@ -17,6 +17,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   final DatabaseService _dbService = DatabaseService();
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   late DateTime _selectedDate;
+  String _filterRange = 'Bulanan'; // Options: 'Bulanan', '7hari', '30hari'
 
   @override
   void initState() {
@@ -136,6 +137,52 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ],
     );
   }
+  Widget _buildFilterChips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _filterChip('Bulanan', 'Bulanan'),
+            const SizedBox(width: 8),
+            _filterChip('7 Hari Terakhir', '7hari'),
+            const SizedBox(width: 8),
+            _filterChip('30 Hari Terakhir', '30hari'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, String value) {
+    final theme = Provider.of<ThemeProvider>(context);
+    bool isSelected = _filterRange == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _filterRange = value;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.accent : theme.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? theme.accent : theme.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : theme.textSecondary,
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +196,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Histori Transaksi', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(DateFormat('MMMM yyyy').format(_selectedDate), style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+            Text(
+              _filterRange == '7hari'
+                  ? '7 Hari Terakhir'
+                  : _filterRange == '30hari'
+                      ? '30 Hari Terakhir'
+                      : DateFormat('MMMM yyyy').format(_selectedDate),
+              style: TextStyle(color: theme.textSecondary, fontSize: 11),
+            ),
           ],
         ),
         actions: [
@@ -180,7 +234,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   );
                 },
               );
-              if (picked != null) setState(() => _selectedDate = picked);
+              if (picked != null) {
+                setState(() {
+                  _filterRange = 'Bulanan';
+                  _selectedDate = picked;
+                });
+              }
             },
           ),
         ],
@@ -193,21 +252,42 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Container(color: theme.navBorder, height: 1),
         ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _dbService.getAllTransactions(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          
-          var allDocs = snapshot.data?.docs ?? [];
-          var docs = allDocs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final ts = data['timestamp'] as Timestamp?;
-            if (ts == null) return false;
-            DateTime d = ts.toDate();
-            return d.month == _selectedDate.month && d.year == _selectedDate.year;
-          }).toList();
+      body: Column(
+        children: [
+          _buildFilterChips(),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _dbService.getAllTransactions(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                
+                var allDocs = snapshot.data?.docs ?? [];
+                var docs = allDocs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final ts = data['timestamp'] as Timestamp?;
+                  if (ts == null) return false;
+                  DateTime d = ts.toDate();
+                  
+                  if (_filterRange == '7hari') {
+                    final limitDate = DateTime.now().subtract(const Duration(days: 7));
+                    return d.isAfter(limitDate);
+                  } else if (_filterRange == '30hari') {
+                    final limitDate = DateTime.now().subtract(const Duration(days: 30));
+                    return d.isAfter(limitDate);
+                  } else {
+                    return d.month == _selectedDate.month && d.year == _selectedDate.year;
+                  }
+                }).toList();
 
-          if (docs.isEmpty) return Center(child: Text('Tidak ada transaksi di bulan ini', style: TextStyle(color: theme.textMuted)));
+                if (docs.isEmpty) {
+                  String emptyText = 'Tidak ada transaksi di bulan ini';
+                  if (_filterRange == '7hari') {
+                    emptyText = 'Tidak ada transaksi dalam 7 hari terakhir';
+                  } else if (_filterRange == '30hari') {
+                    emptyText = 'Tidak ada transaksi dalam 30 hari terakhir';
+                  }
+                  return Center(child: Text(emptyText, style: TextStyle(color: theme.textMuted)));
+                }
 
           return ListView.builder(
             itemCount: docs.length,
@@ -312,6 +392,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           );
         },
       ),
+    ),
+  ],
+),
     );
   }
 }

@@ -20,6 +20,7 @@ class _AturListScreenState extends State<AturListScreen> {
   final _amountController = TextEditingController();
   String? _editingId;
   int _selectedTenorMonths = 0;
+  DateTime _selectedDueDate = DateTime.now();
 
   @override
   void dispose() {
@@ -34,6 +35,7 @@ class _AturListScreenState extends State<AturListScreen> {
       _amountController.clear();
       _editingId = null;
       _selectedTenorMonths = 0;
+      _selectedDueDate = DateTime.now();
     });
   }
 
@@ -46,6 +48,7 @@ class _AturListScreenState extends State<AturListScreen> {
       await _dbService.addFixedExpense(
         title: _titleController.text,
         amount: amount,
+        dueDate: _selectedDueDate,
         tenorMonths: _selectedTenorMonths,
       );
     } else {
@@ -54,6 +57,7 @@ class _AturListScreenState extends State<AturListScreen> {
         _titleController.text,
         amount,
         _selectedTenorMonths,
+        _selectedDueDate,
       );
     }
     _resetForm();
@@ -147,6 +151,57 @@ class _AturListScreenState extends State<AturListScreen> {
                       }
                     },
                   ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDueDate,
+                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                        lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: ColorScheme(
+                                brightness: theme.isDark ? Brightness.dark : Brightness.light,
+                                primary: const Color(0xFF818CF8),
+                                onPrimary: Colors.white,
+                                surface: theme.card,
+                                onSurface: theme.textPrimary,
+                                secondary: theme.accent,
+                                onSecondary: Colors.white,
+                                error: Colors.red,
+                                onError: Colors.white,
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _selectedDueDate = picked;
+                        });
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Tanggal Jatuh Tempo/Bayar',
+                        labelStyle: TextStyle(color: theme.textSecondary),
+                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            DateFormat('dd MMMM yyyy').format(_selectedDueDate),
+                            style: TextStyle(color: theme.textPrimary, fontSize: 16),
+                          ),
+                          Icon(Icons.calendar_today, size: 16, color: theme.textSecondary),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -233,6 +288,11 @@ class _AturListScreenState extends State<AturListScreen> {
                               tenor = ((doc['tenorMonths'] ?? 0) as num).toInt();
                             } catch (_) {}
 
+                            DateTime dueDate = DateTime.now();
+                            try {
+                              dueDate = (doc['dueDate'] as Timestamp).toDate();
+                            } catch (_) {}
+
                             return Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
@@ -271,6 +331,10 @@ class _AturListScreenState extends State<AturListScreen> {
                                             ),
                                             Text(
                                               tenor == 0 ? '• Jk. Pendek' : '• Tenor: $tenor Bln',
+                                              style: TextStyle(color: theme.textSecondary, fontSize: 9),
+                                            ),
+                                            Text(
+                                              '• Jt. Tempo: ${DateFormat('dd/MM/yyyy').format(dueDate)}',
                                               style: TextStyle(color: theme.textSecondary, fontSize: 9),
                                             ),
                                           ],
@@ -319,6 +383,7 @@ class _AturListScreenState extends State<AturListScreen> {
                                                _titleController.text = title;
                                                _amountController.text = amount.toString();
                                                _selectedTenorMonths = tenor;
+                                               _selectedDueDate = dueDate;
                                              });
                                            },
                                           child: const Text('Edit', style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),

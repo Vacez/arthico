@@ -32,6 +32,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
   final GlobalKey _chartKey = GlobalKey();
   bool _isWeekly = false; // true for weekly view, false for monthly
   String _selectedReportType = 'Ringkasan'; // 'Ringkasan', 'Neraca', 'Laba Rugi', 'Buku Besar', 'Arus Kas'
+  bool _showAllTransactions = false;
   late Stream<QuerySnapshot> _goalsStream;
   late Stream<QuerySnapshot> _fixedExpensesStream;
   late Stream<QuerySnapshot> _transactionsStream;
@@ -236,7 +237,12 @@ class _LaporanScreenState extends State<LaporanScreen> {
                                               );
                                             },
                                           );
-                                          if (picked != null) setState(() => _selectedDate = picked);
+                                          if (picked != null) {
+                                            setState(() {
+                                              _selectedDate = picked;
+                                              _showAllTransactions = false;
+                                            });
+                                          }
                                         },
                                         child: _filterDropdown(DateFormat('MMM yyyy').format(_selectedDate)),
                                       ),
@@ -471,6 +477,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
   Widget _buildRincianTransaksi(AsyncSnapshot<QuerySnapshot> snapshot) {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
+    
+    final allTransactions = snapshot.data?.docs ?? [];
+    final filteredTransactions = allTransactions.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final timestamp = data['timestamp'] as Timestamp?;
+      if (timestamp == null) return false;
+      final date = timestamp.toDate();
+      return date.month == _selectedDate.month && date.year == _selectedDate.year;
+    }).toList();
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -490,24 +506,18 @@ class _LaporanScreenState extends State<LaporanScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+          if (filteredTransactions.isEmpty)
             Text('Tidak ada data transaksi', style: TextStyle(color: theme.textMuted))
-          else
+          else ...[
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: snapshot.data!.docs.length,
+              itemCount: _showAllTransactions
+                  ? filteredTransactions.length
+                  : (filteredTransactions.length > 3 ? 3 : filteredTransactions.length),
               itemBuilder: (context, index) {
-                var doc = snapshot.data!.docs[index];
+                var doc = filteredTransactions[index];
                 final data = doc.data() as Map<String, dynamic>;
-                final timestamp = data['timestamp'] as Timestamp?;
-                if (timestamp == null) return const SizedBox.shrink();
-                
-                DateTime date = timestamp.toDate();
-                if (date.month != _selectedDate.month || date.year != _selectedDate.year) {
-                  return const SizedBox.shrink();
-                }
-
                 bool isIncome = data['type'] == 'Pemasukan';
                 return ListTile(
                   leading: Icon(isIncome ? Icons.add_circle : Icons.remove_circle, color: isIncome ? Colors.blue : Colors.red),
@@ -520,6 +530,25 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 );
               },
             ),
+            if (filteredTransactions.length > 3) ...[
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _showAllTransactions = !_showAllTransactions;
+                  });
+                },
+                icon: Icon(
+                  _showAllTransactions ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: const Color(0xFF3B82F6),
+                ),
+                label: Text(
+                  _showAllTransactions ? 'Tutup Rincian' : 'Lihat Seluruh Rincian Transaksi',
+                  style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );

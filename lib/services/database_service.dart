@@ -240,6 +240,7 @@ class DatabaseService {
   Future<void> addFixedExpense({
     required String title,
     required double amount,
+    required DateTime dueDate,
     int tenorMonths = 0,
   }) async {
     await _db.collection('users').doc(uid).collection('fixed_expenses').add({
@@ -247,16 +248,24 @@ class DatabaseService {
       'amount': amount,
       'isPaid': false,
       'tenorMonths': tenorMonths,
+      'dueDate': Timestamp.fromDate(dueDate),
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
 
   // Update fixed expense
-  Future<void> updateFixedExpense(String id, String title, double amount, int tenorMonths) async {
+  Future<void> updateFixedExpense(
+    String id,
+    String title,
+    double amount,
+    int tenorMonths,
+    DateTime dueDate,
+  ) async {
     await _db.collection('users').doc(uid).collection('fixed_expenses').doc(id).update({
       'title': title,
       'amount': amount,
       'tenorMonths': tenorMonths,
+      'dueDate': Timestamp.fromDate(dueDate),
     });
   }
 
@@ -330,6 +339,96 @@ class DatabaseService {
         .collection('fixed_expenses')
         .orderBy('createdAt', descending: true)
         .snapshots();
+  }
+
+  // Check and process auto-payments for due fixed expenses
+  Future<void> checkAndProcessAutoPayments() async {
+    try {
+      if (uid.isEmpty) return;
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 23, 59, 59); // end of today
+
+      final userRef = _db.collection('users').doc(uid);
+      final expensesQuery = await userRef
+          .collection('fixed_expenses')
+          .where('isPaid', isEqualTo: false)
+          .get();
+
+      for (var doc in expensesQuery.docs) {
+        final data = doc.data();
+        if (data['dueDate'] == null) continue;
+
+        final DateTime dueDate = (data['dueDate'] as Timestamp).toDate();
+
+        // If due date is on or before today
+        if (dueDate.isBefore(today) || dueDate.isAtSameMomentAs(today)) {
+          final String title = data['title'] ?? '';
+          final double amount = (data['amount'] ?? 0).toDouble();
+          int tenor = 0;
+          try {
+            tenor = ((data['tenorMonths'] ?? 0) as num).toInt();
+          } catch (_) {}
+
+          // 1. Process payment (deduct balance and record transaction)
+          // Get current balance
+          final userSnap = await userRef.get();
+          double currentBalance = 0;
+          if (userSnap.exists && userSnap.data() != null) {
+            currentBalance = ((userSnap.data() as Map<String, dynamic>)['balance'] ?? 0).toDouble();
+          }
+
+          // Deduct balance (allow negative balance or clamp at 0 - standard auto-debit allows deduction anyway)
+          double newBalance = currentBalance - amount;
+          await userRef.set({
+            'balance': newBalance,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          // Record transaction
+          String note = 'Auto-Bayar: $title';
+          if (tenor > 0) {
+            note += ' (Tenor sisa: ${tenor - 1} bln)';
+          }
+          await userRef.collection('transactions').add({
+            'type': 'Pengeluaran',
+            'category': 'Beban Pokok',
+            'allocation': 'Primer',
+            'amount': amount,
+            'note': note,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+
+          // 2. Handle Tenor / Recurring
+          if (tenor > 1) {
+            // Move due date to next month
+            int nextYear = dueDate.year;
+            int nextMonth = dueDate.month + 1;
+            if (nextMonth > 12) {
+              nextMonth = 1;
+              nextYear += 1;
+            }
+            // clamp day to valid days in that month (e.g. 31st of November -> 30th of November)
+            int lastDay = DateTime(nextYear, nextMonth + 1, 0).day;
+            int nextDay = dueDate.day > lastDay ? lastDay : dueDate.day;
+            DateTime nextDueDate = DateTime(nextYear, nextMonth, nextDay, dueDate.hour, dueDate.minute, dueDate.second);
+
+            await doc.reference.update({
+              'tenorMonths': tenor - 1,
+              'dueDate': Timestamp.fromDate(nextDueDate),
+            });
+          } else {
+            // tenor is 1 or 0, so mark as paid
+            await doc.reference.update({
+              'isPaid': true,
+              'tenorMonths': 0,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print("❌ AUTO PAYMENT ERROR: $e");
+    }
   }
 
   // --- GOALS ---
@@ -452,5 +551,20 @@ class DatabaseService {
       key: value,
       'lastUpdated': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  // Update user profile picture (base64 string)
+  Future<Map<String, dynamic>> updateProfilePhoto(String base64Image) async {
+    try {
+      if (uid.isEmpty) return {'success': false, 'error': 'User ID is empty.'};
+      DocumentReference userRef = _db.collection('users').doc(uid);
+      await userRef.set({
+        'photoUrl': base64Image,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      return {'success': true};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
   }
 }

@@ -6,9 +6,13 @@ import '../services/database_service.dart';
 import '../providers/theme_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? onNavigateToDashboard;
+  const ProfileScreen({super.key, this.onNavigateToDashboard});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -23,6 +27,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
   final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
+  bool _showAllProfileTransactions = false;
 
   @override
   void initState() {
@@ -228,6 +233,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _pickAndUploadImage() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      // Pick image from gallery
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 300,  // Resize to 300x300 to keep base64 string size small
+        maxHeight: 300,
+        imageQuality: 70, // Moderate compression
+      );
+      
+      if (image == null) return;
+      
+      // Read bytes and convert to base64
+      final Uint8List imageBytes = await image.readAsBytes();
+      final String base64Image = base64Encode(imageBytes);
+      
+      // Show loading indicator
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      final res = await _dbService.updateProfilePhoto(base64Image);
+      
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      
+      if (res['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Foto profil berhasil diperbarui!'), backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Gagal mengunggah foto: ${res['error']}'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Terjadi kesalahan: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -240,6 +291,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         String displayName = user?.displayName ?? 'User';
         bool emailNotif = true;
         bool autoLogout = false;
+        String? photoUrl;
 
         if (userSnapshot.hasData && userSnapshot.data!.exists) {
           final data = userSnapshot.data!.data() as Map<String, dynamic>?;
@@ -248,6 +300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             displayName = data['name'] ?? displayName;
             emailNotif = data['emailNotifications'] ?? true;
             autoLogout = data['autoLogout'] ?? false;
+            photoUrl = data['photoUrl'];
           }
         }
 
@@ -258,7 +311,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: isMobile 
             ? Column(
                 children: [
-                  _buildUserProfileCard(balance, displayName, isMobile),
+                  _buildUserProfileCard(balance, displayName, photoUrl, isMobile),
                   const SizedBox(height: 24),
                   _buildRiwayatTransaksi(),
                   const SizedBox(height: 24),
@@ -268,7 +321,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildUserProfileCard(balance, displayName, isMobile),
+                  _buildUserProfileCard(balance, displayName, photoUrl, isMobile),
                   const SizedBox(width: 24),
                   Expanded(
                     child: Column(
@@ -286,7 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildUserProfileCard(double balance, String displayName, bool isMobile) {
+  Widget _buildUserProfileCard(double balance, String displayName, String? photoUrl, bool isMobile) {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Container(
       width: isMobile ? double.infinity : 300,
@@ -301,25 +354,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF10B981)]),
-                ),
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: theme.card,
-                  child: Text(
-                    displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : 'A',
-                    style: TextStyle(fontSize: 40, color: theme.textPrimary, fontWeight: FontWeight.bold),
+              GestureDetector(
+                onTap: _pickAndUploadImage,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF10B981)]),
+                  ),
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundColor: theme.card,
+                    backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                        ? MemoryImage(base64Decode(photoUrl))
+                        : null,
+                    child: photoUrl != null && photoUrl.isNotEmpty
+                        ? null
+                        : Text(
+                            displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : 'A',
+                            style: TextStyle(fontSize: 40, color: theme.textPrimary, fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ),
               ),
-              const CircleAvatar(
-                radius: 12,
-                backgroundColor: Color(0xFF10B981),
-                child: Icon(Icons.check, size: 12, color: Colors.white),
+              GestureDetector(
+                onTap: _pickAndUploadImage,
+                child: const CircleAvatar(
+                  radius: 12,
+                  backgroundColor: Color(0xFF10B981),
+                  child: Icon(Icons.edit, size: 12, color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -387,29 +451,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 12),
               Text('Riwayat Transaksi', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
               const Spacer(),
-              const Text('Lihat Dashboard >', style: TextStyle(color: Color(0xFF3B82F6), fontSize: 12)),
+              GestureDetector(
+                onTap: widget.onNavigateToDashboard,
+                child: const Text('Lihat Dashboard >', style: TextStyle(color: Color(0xFF3B82F6), fontSize: 12)),
+              ),
             ],
           ),
           const SizedBox(height: 24),
           StreamBuilder<QuerySnapshot>(
-            stream: _dbService.getRecentTransactions(limit: 5),
+            stream: _dbService.getRecentTransactions(limit: 20),
             builder: (context, snapshot) {
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return Text('Belum ada aktivitas transaksi.', style: TextStyle(color: theme.textMuted));
               }
+
+              final docs = snapshot.data!.docs;
+
               return Column(
-                children: snapshot.data!.docs.map((doc) {
-                  bool isIncome = doc['type'] == 'Pemasukan';
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(doc['category'], style: TextStyle(color: theme.textPrimary, fontSize: 14)),
-                    subtitle: Text(doc['note'] ?? '', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                    trailing: Text(
-                      (isIncome ? '' : '- ') + currencyFormatter.format(doc['amount']),
-                      style: TextStyle(color: isIncome ? Colors.blue : Colors.red, fontWeight: FontWeight.bold),
+                children: [
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _showAllProfileTransactions
+                        ? docs.length
+                        : (docs.length > 3 ? 3 : docs.length),
+                    itemBuilder: (context, index) {
+                      var doc = docs[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      bool isIncome = data['type'] == 'Pemasukan';
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(data['category'] ?? '-', style: TextStyle(color: theme.textPrimary, fontSize: 14)),
+                        subtitle: Text(data['note'] ?? '', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                        trailing: Text(
+                          (isIncome ? '' : '- ') + currencyFormatter.format(data['amount'] ?? 0),
+                          style: TextStyle(color: isIncome ? Colors.blue : Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                      );
+                    },
+                  ),
+                  if (docs.length > 3) ...[
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _showAllProfileTransactions = !_showAllProfileTransactions;
+                        });
+                      },
+                      icon: Icon(
+                        _showAllProfileTransactions ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        color: const Color(0xFF3B82F6),
+                      ),
+                      label: Text(
+                        _showAllProfileTransactions ? 'Tutup Riwayat' : 'Lihat Seluruh Riwayat Transaksi',
+                        style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  );
-                }).toList(),
+                  ],
+                ],
               );
             },
           ),
