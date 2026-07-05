@@ -47,6 +47,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant LaporanScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialDate != oldWidget.initialDate) {
+      setState(() {
+        _selectedDate = widget.initialDate ?? DateTime.now();
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
     
@@ -74,7 +84,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
               stream: _transactionsStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
                 double income = 0;
                 double expense = 0;

@@ -27,7 +27,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   
   int _activeScreenIndex = 0;
-  late PageController _pageController;
 
   // Cached Stream variables to prevent rebuilds
   late Stream<DocumentSnapshot> _userDataStream;
@@ -52,7 +51,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 0);
     _userDataStream = _dbService.getUserData();
     _allTransactionsStream = _dbService.getAllTransactions();
     _fixedExpensesStream = _dbService.getFixedExpenses();
@@ -63,7 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _pageController.dispose();
     _amountController.dispose();
     _noteController.dispose();
     super.dispose();
@@ -194,11 +191,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _buildNavbar(),
             Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() => _activeScreenIndex = index);
-                },
+              child: IndexedStack(
+                index: _activeScreenIndex,
                 children: [
                   SingleChildScrollView(child: _buildDashboardContent()),
                   SingleChildScrollView(child: GoalsScreen()),
@@ -215,11 +209,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _goToPage(int index) {
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-    );
+    setState(() {
+      _activeScreenIndex = index;
+    });
   }
 
   Widget _buildDashboardContent() {
@@ -229,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (userSnapshot.hasError) {
           return Center(child: Text('Error: ${userSnapshot.error}', style: const TextStyle(color: Colors.red)));
         }
-        if (userSnapshot.connectionState == ConnectionState.waiting) {
+        if (!userSnapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -526,18 +518,11 @@ class _HomeScreenState extends State<HomeScreen> {
         if (snapshot.hasData) {
           for (var doc in snapshot.data!.docs) {
             final data = doc.data() as Map<String, dynamic>;
-            final timestamp = data['timestamp'] as Timestamp?;
-            if (timestamp == null) continue;
-
-            DateTime date = timestamp.toDate();
-            // FILTER BY MONTH AND YEAR
-            if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
-              double amt = (data['amount'] ?? 0).toDouble();
-              if (data['type'] == 'Pemasukan') {
-                income += amt;
-              } else {
-                expense += amt;
-              }
+            double amt = (data['amount'] ?? 0).toDouble();
+            if (data['type'] == 'Pemasukan') {
+              income += amt;
+            } else {
+              expense += amt;
             }
           }
         }
@@ -1153,7 +1138,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 height: 200,
                 width: double.infinity,
-                child: snapshot.connectionState == ConnectionState.waiting 
+                child: !snapshot.hasData 
                   ? const Center(child: CircularProgressIndicator())
                   : BarChart(
                       BarChartData(
@@ -1269,8 +1254,9 @@ class _HomeScreenState extends State<HomeScreen> {
           StreamBuilder<QuerySnapshot>(
             stream: _recentTransactionsStream,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red, fontSize: 10)));
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              if (snapshot.data!.docs.isEmpty) {
                 return Center(child: Text('Belum ada transaksi', style: TextStyle(color: theme.textMuted)));
               }
               return Column(
