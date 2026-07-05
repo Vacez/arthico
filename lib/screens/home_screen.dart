@@ -452,6 +452,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _headerDatePicker() {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final DateTime now = DateTime.now();
+    final bool isToday = _selectedDate.day == now.day &&
+        _selectedDate.month == now.month &&
+        _selectedDate.year == now.year;
     return GestureDetector(
       onTap: () async {
         final DateTime? picked = await showDatePicker(
@@ -496,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Icon(Icons.calendar_today, size: 16, color: theme.textSecondary),
             const SizedBox(width: 8),
             Text(
-              DateFormat('MMM yyyy').format(_selectedDate),
+              isToday ? 'Hari Ini' : DateFormat('dd MMM yyyy').format(_selectedDate),
               style: TextStyle(color: theme.textPrimary),
             ),
             Icon(Icons.arrow_drop_down, color: theme.textSecondary),
@@ -514,16 +518,41 @@ class _HomeScreenState extends State<HomeScreen> {
         
         double income = 0;
         double expense = 0;
+        double displayBalance = totalBalance;
+
+        final DateTime now = DateTime.now();
+        final bool isToday = _selectedDate.day == now.day &&
+            _selectedDate.month == now.month &&
+            _selectedDate.year == now.year;
 
         if (snapshot.hasData) {
           for (var doc in snapshot.data!.docs) {
             final data = doc.data() as Map<String, dynamic>;
+            final timestamp = data['timestamp'] as Timestamp?;
+            if (timestamp == null) continue;
+            DateTime date = timestamp.toDate();
             double amt = (data['amount'] ?? 0).toDouble();
-            if (data['type'] == 'Pemasukan') {
-              income += amt;
+
+            if (isToday) {
+              if (data['type'] == 'Pemasukan') {
+                income += amt;
+              } else {
+                expense += amt;
+              }
             } else {
-              expense += amt;
+              if (date.day == _selectedDate.day &&
+                  date.month == _selectedDate.month &&
+                  date.year == _selectedDate.year) {
+                if (data['type'] == 'Pemasukan') {
+                  income += amt;
+                } else {
+                  expense += amt;
+                }
+              }
             }
+          }
+          if (!isToday) {
+            displayBalance = income - expense;
           }
         }
 
@@ -532,11 +561,11 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: [
-              _summaryCard('Total Pemasukan', currencyFormatter.format(income), 'Seluruh dana masuk', Icons.arrow_upward, Colors.orange),
+              _summaryCard('Total Pemasukan', currencyFormatter.format(income), isToday ? 'Seluruh dana masuk' : 'Dana masuk tanggal ini', Icons.arrow_upward, Colors.orange),
               const SizedBox(width: 16),
-              _summaryCard('Total Pengeluaran', currencyFormatter.format(expense), 'Seluruh dana keluar', Icons.arrow_downward, Colors.green),
+              _summaryCard('Total Pengeluaran', currencyFormatter.format(expense), isToday ? 'Seluruh dana keluar' : 'Dana keluar tanggal ini', Icons.arrow_downward, Colors.green),
               const SizedBox(width: 16),
-              _balanceCard(totalBalance),
+              _balanceCard(displayBalance),
               const SizedBox(width: 16),
               _analysisCard(income, expense),
             ],
@@ -1240,6 +1269,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildRecentActivity() {
     final theme = Provider.of<ThemeProvider>(context);
+    final DateTime now = DateTime.now();
+    final bool isToday = _selectedDate.day == now.day &&
+        _selectedDate.month == now.month &&
+        _selectedDate.year == now.year;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -1249,24 +1282,33 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Aktivitas Terbaru', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(isToday ? 'Aktivitas Terbaru' : 'Aktivitas Tanggal Ini', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           StreamBuilder<QuerySnapshot>(
             stream: _recentTransactionsStream,
             builder: (context, snapshot) {
               if (snapshot.hasError) return Center(child: Text('Err: ${snapshot.error}', style: const TextStyle(color: Colors.red, fontSize: 10)));
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              if (snapshot.data!.docs.isEmpty) {
+              
+              final docs = snapshot.data!.docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final timestamp = data['timestamp'] as Timestamp?;
+                if (timestamp == null) return false;
+                DateTime date = timestamp.toDate();
+                if (isToday) {
+                  return date.month == _selectedDate.month && date.year == _selectedDate.year;
+                } else {
+                  return date.day == _selectedDate.day &&
+                      date.month == _selectedDate.month &&
+                      date.year == _selectedDate.year;
+                }
+              }).toList();
+
+              if (docs.isEmpty) {
                 return Center(child: Text('Belum ada transaksi', style: TextStyle(color: theme.textMuted)));
               }
               return Column(
-                children: snapshot.data!.docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final timestamp = data['timestamp'] as Timestamp?;
-                  if (timestamp == null) return false;
-                  DateTime date = timestamp.toDate();
-                  return date.month == _selectedDate.month && date.year == _selectedDate.year;
-                }).take(5).map((doc) {
+                children: docs.take(5).map((doc) {
                   bool isIncome = doc['type'] == 'Pemasukan';
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
