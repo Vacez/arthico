@@ -1798,38 +1798,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
   Widget _buildReportHeaderActions(String title) {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              if (_selectedReportType == 'Neraca') ...[
-                Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                Text('(dalam Rupiah)', style: TextStyle(color: theme.textMuted, fontSize: 10, fontStyle: FontStyle.italic)),
-              ] else
-                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-            ],
-          ),
-        ),
-        Row(
-          children: [
-            TextButton.icon(
-              onPressed: () => _showExportPeriodDialog('PDF'),
-              icon: const Icon(Icons.print, size: 16, color: Color(0xFFEF4444)),
-              label: const Text('PDF', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: () => _showExportPeriodDialog('Excel'),
-              icon: const Icon(Icons.download, size: 16, color: Color(0xFF10B981)),
-              label: const Text('Excel', style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
+        Text(title, style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        if (_selectedReportType == 'Neraca') ...[
+          Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+          Text('(dalam Rupiah)', style: TextStyle(color: theme.textMuted, fontSize: 10, fontStyle: FontStyle.italic)),
+        ] else
+          Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
       ],
     );
   }
