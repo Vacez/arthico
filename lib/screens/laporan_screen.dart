@@ -30,7 +30,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
   final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   late DateTime _selectedDate;
   final GlobalKey _chartKey = GlobalKey();
-  bool _isWeekly = false; // true for weekly view, false for monthly
+  String _chartRange = '1 Bulan';
   String _selectedReportType = 'Ringkasan'; // 'Ringkasan', 'Neraca', 'Laba Rugi', 'Buku Besar', 'Arus Kas'
   bool _showAllTransactions = false;
   late Stream<QuerySnapshot> _goalsStream;
@@ -90,6 +90,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 double expense = 0;
                 double cumulativeBalance = 0;
                 List<BarChartGroupData> chartData = [];
+                List<String> chartLabels = [];
 
                 if (snapshot.hasData) {
                   // Calculate cumulativeBalance up to the end of the selected month
@@ -112,7 +113,8 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   }
 
                   // Aggregate data based on selected period
-                  if (_isWeekly) {
+
+                  if (_chartRange == '1 Bulan') {
                     // Weekly aggregation within the selected month (initialize 5 weeks)
                     Map<int, double> weeklyIncome = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
                     Map<int, double> weeklyExpense = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
@@ -132,34 +134,79 @@ class _LaporanScreenState extends State<LaporanScreen> {
                         }
                       }
                     }
-                    // Build chart data for each week sequentially (x goes from 1 to 5)
-                    List<int> sortedWeeks = [1, 2, 3, 4, 5];
-                    chartData = sortedWeeks.map((week) {
+                    chartData = [1, 2, 3, 4, 5].map((week) {
                       double inc = weeklyIncome[week] ?? 0;
                       double exp = weeklyExpense[week] ?? 0;
                       return BarChartGroupData(
                         x: week,
                         barRods: [
-                          BarChartRodData(
-                            toY: inc, 
-                            color: Colors.blue, 
-                            width: 8,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                          ),
-                          BarChartRodData(
-                            toY: exp, 
-                            color: Colors.red, 
-                            width: 8,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                          ),
+                          BarChartRodData(toY: inc, color: Colors.blue, width: 8, borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
+                          BarChartRodData(toY: exp, color: Colors.red, width: 8, borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
                         ],
                       );
                     }).toList();
-                    // Sum totals for display
+                    
                     income = weeklyIncome.values.fold(0, (p, e) => p + e);
                     expense = weeklyExpense.values.fold(0, (p, e) => p + e);
                   } else {
-                    // Existing monthly aggregation
+                    // 3 Bulan or 1 Tahun
+                    int numMonths = _chartRange == '3 Bulan' ? 3 : 12;
+                    List<DateTime> months = [];
+                    for (int i = numMonths - 1; i >= 0; i--) {
+                      int year = _selectedDate.year;
+                      int month = _selectedDate.month - i;
+                      while (month <= 0) {
+                        month += 12;
+                        year -= 1;
+                      }
+                      months.add(DateTime(year, month, 1));
+                    }
+                    
+                    Map<String, double> monthlyIncome = {};
+                    Map<String, double> monthlyExpense = {};
+                    for (var m in months) {
+                      String key = DateFormat('MMM yy').format(m);
+                      monthlyIncome[key] = 0;
+                      monthlyExpense[key] = 0;
+                      chartLabels.add(DateFormat('MMM yy').format(m));
+                    }
+                    
+                    for (var doc in snapshot.data!.docs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final timestamp = data['timestamp'] as Timestamp?;
+                      if (timestamp == null) continue;
+                      DateTime date = timestamp.toDate();
+                      
+                      for (var m in months) {
+                        if (date.month == m.month && date.year == m.year) {
+                          String key = DateFormat('MMM yy').format(m);
+                          double amt = (data['amount'] ?? 0).toDouble();
+                          if (data['type'] == 'Pemasukan') {
+                            monthlyIncome[key] = (monthlyIncome[key] ?? 0) + amt;
+                          } else {
+                            monthlyExpense[key] = (monthlyExpense[key] ?? 0) + amt;
+                          }
+                          break;
+                        }
+                      }
+                    }
+                    
+                    for (int i = 0; i < months.length; i++) {
+                      String key = DateFormat('MMM yy').format(months[i]);
+                      double inc = monthlyIncome[key] ?? 0;
+                      double exp = monthlyExpense[key] ?? 0;
+                      chartData.add(
+                        BarChartGroupData(
+                          x: i,
+                          barRods: [
+                            BarChartRodData(toY: inc, color: Colors.blue, width: numMonths == 3 ? 12 : 6, borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
+                            BarChartRodData(toY: exp, color: Colors.red, width: numMonths == 3 ? 12 : 6, borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
+                          ],
+                        ),
+                      );
+                    }
+                    
+                    // Sisa Keuangan card should still show selected month's totals
                     for (var doc in snapshot.data!.docs) {
                       final data = doc.data() as Map<String, dynamic>;
                       final timestamp = data['timestamp'] as Timestamp?;
@@ -174,10 +221,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
                         }
                       }
                     }
-                    chartData = [
-                      BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: income, color: Colors.blue, width: 20)]),
-                      BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: expense, color: Colors.red, width: 20)]),
-                    ];
                   }
                 }
 
@@ -271,6 +314,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                             _buildCurrentReportContent(
                               snapshot,
                               chartData,
+                              chartLabels,
                               income,
                               expense,
                               cumulativeBalance,
@@ -293,11 +337,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
     );
   }
 
-  void _togglePeriod(bool weekly) {
-    setState(() {
-      _isWeekly = weekly;
-    });
-  }
+
 
   Widget _filterDropdown(String value) {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
@@ -331,12 +371,13 @@ class _LaporanScreenState extends State<LaporanScreen> {
     );
   }
 
-  Widget _buildChartArea(List<BarChartGroupData> chartData) {
-    final theme = Provider.of<ThemeProvider>(context, listen: false);
+  Widget _buildChartArea(List<BarChartGroupData> chartData, List<String> chartLabels) {
+    final theme = Provider.of<ThemeProvider>(context);
+    bool isMobile = MediaQuery.of(context).size.width < 700;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: theme.isDark ? Colors.black12 : theme.inputBg,
+        color: theme.card,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: theme.border),
       ),
@@ -351,13 +392,18 @@ class _LaporanScreenState extends State<LaporanScreen> {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () => _togglePeriod(true),
-                    child: _toggleItem('Mingguan', _isWeekly),
+                    onTap: () => setState(() => _chartRange = '1 Bulan'),
+                    child: _toggleItem('1 Bulan', _chartRange == '1 Bulan'),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   GestureDetector(
-                    onTap: () => _togglePeriod(false),
-                    child: _toggleItem('Bulanan', !_isWeekly),
+                    onTap: () => setState(() => _chartRange = '3 Bulan'),
+                    child: _toggleItem('3 Bld', _chartRange == '3 Bulan'),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => setState(() => _chartRange = '1 Tahun'),
+                    child: _toggleItem('1 Thn', _chartRange == '1 Tahun'),
                   ),
                 ],
               ),
@@ -370,45 +416,45 @@ class _LaporanScreenState extends State<LaporanScreen> {
               height: 200,
               child: chartData.isEmpty 
                 ? Center(child: Icon(Icons.show_chart, color: theme.textMuted, size: 100))
-                : BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      barGroups: chartData,
-                      borderData: FlBorderData(show: false),
-                      titlesData: FlTitlesData(
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (double value, TitleMeta meta) {
-                              if (_isWeekly) {
-                                int week = value.toInt();
-                                if (week >= 1 && week <= 5) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Text('Mgg $week', style: TextStyle(color: theme.textSecondary, fontSize: 9)),
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              } else {
-                                switch (value.toInt()) {
-                                  case 0:
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 8.0),
-                                      child: Text('Pemasukan', style: TextStyle(color: theme.textSecondary, fontSize: 9, fontWeight: FontWeight.bold)),
-                                    );
-                                  case 1:
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 8.0),
-                                      child: Text('Pengeluaran', style: TextStyle(color: theme.textSecondary, fontSize: 9, fontWeight: FontWeight.bold)),
-                                    );
-                                  default:
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: _chartRange == '1 Tahun' ? 500 : (MediaQuery.of(context).size.width - (isMobile ? 56 : 100)),
+                      child: BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          barGroups: chartData,
+                          borderData: FlBorderData(show: false),
+                          titlesData: FlTitlesData(
+                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (double value, TitleMeta meta) {
+                                  if (_chartRange == '1 Bulan') {
+                                    int week = value.toInt();
+                                    if (week >= 1 && week <= 5) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 8.0),
+                                        child: Text('Mgg $week', style: TextStyle(color: theme.textSecondary, fontSize: 9)),
+                                      );
+                                    }
                                     return const SizedBox.shrink();
-                                }
-                              }
-                            },
+                                  } else {
+                                    int idx = value.toInt();
+                                    if (idx >= 0 && idx < chartLabels.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 8.0),
+                                        child: Text(chartLabels[idx], style: TextStyle(color: theme.textSecondary, fontSize: 8)),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  }
+                                },
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -422,13 +468,14 @@ class _LaporanScreenState extends State<LaporanScreen> {
   }
 
   Widget _toggleItem(String label, bool active) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: active ? const Color(0xFF6366F1) : Colors.transparent,
+        color: active ? theme.accent : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label, style: TextStyle(color: active ? Colors.white : Colors.grey, fontSize: 12)),
+      child: Text(label, style: TextStyle(color: active ? Colors.white : theme.textSecondary, fontSize: 11)),
     );
   }
 
@@ -565,7 +612,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
   }
 
   String _sanitizeForPdf(String text) {
-    // Keep only printable ASCII characters (between space 32 and tilde 126) to prevent PDF Unicode crashes
     return text.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
   }
 
@@ -856,9 +902,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
     };
 
     if (_selectedReportType == 'Neraca') {
-      // ----------------------------------------------------
-      // NERACA PDF
-      // ----------------------------------------------------
       double cashBalance = 0;
       for (var doc in transactionsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
@@ -917,12 +960,10 @@ class _LaporanScreenState extends State<LaporanScreen> {
             pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                // LEFT COLUMN: ASET
                 pw.Expanded(
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      // Aset Banner
                       pw.Container(
                         width: double.infinity,
                         padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
@@ -934,14 +975,12 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       ),
                       pw.SizedBox(height: 10),
                       
-                      // Kas / Setara Kas
                       pw.Text('Kas & Setara Kas', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
                       pw.SizedBox(height: 4),
                       pdfNeracaRow('Kas Utama / Saldo Dompet', formatCurrencyPdf(cashBalance)),
                       pdfNeracaSubtotalRow('Total Kas & Setara Kas', formatCurrencyPdf(totalLiquid)),
                       pw.SizedBox(height: 10),
                       
-                      // Aset Investasi
                       pw.Text('Aset Investasi', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
                       pw.SizedBox(height: 4),
                       if (goalsSnapshot.docs.isEmpty)
@@ -955,7 +994,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       pdfNeracaSubtotalRow('Total Aset Investasi', formatCurrencyPdf(totalInvest)),
                       pw.SizedBox(height: 10),
                       
-                      // Total Aset
                       pw.SizedBox(height: 10),
                       pdfNeracaTotalRow('TOTAL ASET', formatCurrencyPdf(totalAssets)),
                     ],
@@ -964,12 +1002,10 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 
                 pw.SizedBox(width: 24),
                 
-                // RIGHT COLUMN: KEWAJIBAN & EKUITAS
                 pw.Expanded(
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      // Kewajiban Banner
                       pw.Container(
                         width: double.infinity,
                         padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
@@ -981,14 +1017,12 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       ),
                       pw.SizedBox(height: 10),
                       
-                      // Kewajiban Jangka Pendek
                       pw.Text('Kewajiban Jangka Pendek', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
                       pw.SizedBox(height: 4),
                       pdfNeracaRow('Kebutuhan Jk. Pendek', formatCurrencyPdf(shortTermLiabilities)),
                       pdfNeracaSubtotalRow('Total Kewajiban Jangka Pendek', formatCurrencyPdf(totalShort)),
                       pw.SizedBox(height: 10),
                       
-                      // Kewajiban Jangka Panjang
                       pw.Text('Kewajiban Jangka Panjang', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
                       pw.SizedBox(height: 4),
                       pdfNeracaRow('Kebutuhan Jk. Panjang', formatCurrencyPdf(carLoan)),
@@ -996,13 +1030,11 @@ class _LaporanScreenState extends State<LaporanScreen> {
                       pdfNeracaSubtotalRow('Total Kewajiban', formatCurrencyPdf(totalLiabilities)),
                       pw.SizedBox(height: 10),
                       
-                      // Kekayaan Bersih
                       pw.Text('Kekayaan Bersih', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColor.fromHex('#1F2937'))),
                       pw.SizedBox(height: 4),
                       pdfNeracaRow('Nilai Kekayaan Bersih (Ekuitas)', formatCurrencyPdf(netWorth)),
                       pw.SizedBox(height: 20),
                       
-                      // Total Kewajiban & Ekuitas
                       pdfNeracaTotalRow('TOTAL HUTANG & KEKAYAAN BERSIH', formatCurrencyPdf(totalAssets)),
                     ],
                   ),
@@ -1014,9 +1046,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       ));
 
     } else if (_selectedReportType == 'Laba Rugi') {
-      // ----------------------------------------------------
-      // LABA RUGI PDF
-      // ----------------------------------------------------
       Map<String, double> incomeByCat = {};
       Map<String, double> expenseByCat = {};
       double totalIncome = 0;
@@ -1111,9 +1140,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       ));
 
     } else if (_selectedReportType == 'Buku Besar') {
-      // ----------------------------------------------------
-      // BUKU BESAR PDF
-      // ----------------------------------------------------
       Map<String, List<Map<String, dynamic>>> transactionsByCat = {};
       for (var doc in transactionsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
@@ -1201,9 +1227,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       ));
 
     } else if (_selectedReportType == 'Arus Kas') {
-      // ----------------------------------------------------
-      // ARUS KAS PDF
-      // ----------------------------------------------------
       double flowOperasiIn = 0;
       double flowOperasiOut = 0;
       double flowInvestasiIn = 0;
@@ -1221,7 +1244,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
         double amt = (data['amount'] ?? 0).toDouble();
         bool isIncome = data['type'] == 'Pemasukan';
 
-        // Cumulative balance up to selected end date
         if (!date.isAfter(endDate)) {
           if (isIncome) cumulativeBalance += amt; else cumulativeBalance -= amt;
         }
@@ -1268,21 +1290,18 @@ class _LaporanScreenState extends State<LaporanScreen> {
             pdfArusKasTotalBlock('SALDO AWAL KAS', saldoAwal, isStart: true),
             pw.SizedBox(height: 5),
 
-            // A. OPERATING
             pdfArusKasHeaderBlock('A. Arus Kas Dari Aktivitas Operasi'),
             if (flowOperasiIn > 0) pdfArusKasRow('Penerimaan Kas (Pendapatan)', flowOperasiIn),
             if (flowOperasiOut > 0) pdfArusKasRow('Pengeluaran Kas (Beban Operasional)', -flowOperasiOut),
             if (flowOperasiIn == 0 && flowOperasiOut == 0) pdfArusKasRow('Tidak ada aktivitas operasi', 0),
             pdfArusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Operasi', netOperasi),
 
-            // B. INVESTING
             pdfArusKasHeaderBlock('B. Arus Kas Dari Aktivitas Investasi'),
             if (flowInvestasiIn > 0) pdfArusKasRow('Penerimaan Investasi/Tabungan', flowInvestasiIn),
             if (flowInvestasiOut > 0) pdfArusKasRow('Penempatan Investasi/Tabungan', -flowInvestasiOut),
             if (flowInvestasiIn == 0 && flowInvestasiOut == 0) pdfArusKasRow('Tidak ada aktivitas investasi', 0),
             pdfArusKasSubtotalRow('Jumlah Kas Bersih dari Aktivitas Investasi', netInvestasi),
 
-            // C. FINANCING
             pdfArusKasHeaderBlock('C. Arus Kas Dari Aktivitas Pendanaan'),
             if (flowPendanaanIn > 0) pdfArusKasRow('Penerimaan Pinjaman/Modal', flowPendanaanIn),
             if (flowPendanaanOut > 0) pdfArusKasRow('Pelunasan Pinjaman/Hutang/Cicilan', -flowPendanaanOut),
@@ -1293,7 +1312,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
             pw.Divider(thickness: 0.5, color: PdfColors.grey300),
             pw.SizedBox(height: 5),
 
-            // NET FLOW & END BALANCE
             pdfArusKasSubtotalRow('KENAIKAN / (PENURUNAN) KAS BERSIH (A+B+C)', netFlow),
             pdfArusKasTotalBlock('SALDO AKHIR KAS', saldoAkhir, isStart: false),
           ];
@@ -1301,9 +1319,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       ));
 
     } else {
-      // ----------------------------------------------------
-      // RINGKASAN PDF (DEFAULT)
-      // ----------------------------------------------------
       List<List<String>> transactionsData = [];
       if (transactionsSnapshot.docs.isNotEmpty) {
         final docs = List<QueryDocumentSnapshot>.from(transactionsSnapshot.docs);
@@ -1368,7 +1383,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       ));
     }
 
-    // Save and layout PDF
     if (kIsWeb) {
       await Printing.sharePdf(bytes: await pdf.save(), filename: 'laporan_${_selectedReportType.toLowerCase()}.pdf');
     } else {
@@ -1390,7 +1404,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
         ? "${DateFormat('dd/MM/yyyy').format(startDate)} - ${DateFormat('dd/MM/yyyy').format(endDate)}"
         : DateFormat('MMMM yyyy').format(_selectedDate);
 
-    // Fetch user name
     String userName = 'User';
     try {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -1412,9 +1425,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
     final transactionsSnapshot = await _dbService.getAllTransactionsOnce();
 
     if (_selectedReportType == 'Neraca') {
-      // ----------------------------------------------------
-      // EXCEL: NERACA
-      // ----------------------------------------------------
       double cashBalance = 0;
       for (var doc in transactionsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
@@ -1469,9 +1479,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       sheet.appendRow(["TOTAL ASET", totalAssets, "TOTAL HUTANG & KEKAYAAN BERSIH", totalAssets]);
 
     } else if (_selectedReportType == 'Laba Rugi') {
-      // ----------------------------------------------------
-      // EXCEL: LABA RUGI
-      // ----------------------------------------------------
       Map<String, double> incomeByCat = {};
       Map<String, double> expenseByCat = {};
       double totalIncome = 0;
@@ -1517,9 +1524,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       sheet.appendRow([totalIncome - totalExpense >= 0 ? "LABA BERSIH" : "RUGI BERSIH", totalIncome - totalExpense]);
 
     } else if (_selectedReportType == 'Buku Besar') {
-      // ----------------------------------------------------
-      // EXCEL: BUKU BESAR
-      // ----------------------------------------------------
       Map<String, List<Map<String, dynamic>>> transactionsByCat = {};
       for (var doc in transactionsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
@@ -1563,9 +1567,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       });
 
     } else if (_selectedReportType == 'Arus Kas') {
-      // ----------------------------------------------------
-      // EXCEL: ARUS KAS
-      // ----------------------------------------------------
       double flowOperasiIn = 0;
       double flowOperasiOut = 0;
       double flowInvestasiIn = 0;
@@ -1633,9 +1634,6 @@ class _LaporanScreenState extends State<LaporanScreen> {
       sheet.appendRow(["SALDO AKHIR KAS", saldoAkhir]);
 
     } else {
-      // ----------------------------------------------------
-      // EXCEL: RINGKASAN (DEFAULT)
-      // ----------------------------------------------------
       sheet.appendRow(["LAPORAN KEUANGAN RINGKASAN"]);
       sheet.appendRow(["Saudara/i", userName]);
       sheet.appendRow(["Periode:", formattedPeriod]);
@@ -1753,6 +1751,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
   Widget _buildCurrentReportContent(
     AsyncSnapshot<QuerySnapshot> snapshot,
     List<BarChartGroupData> chartData,
+    List<String> chartLabels,
     double income,
     double expense,
     double cumulativeBalance,
@@ -1775,26 +1774,64 @@ class _LaporanScreenState extends State<LaporanScreen> {
         return Column(
           children: [
             isMobile
-                ? Column(
-                    children: [
-                      _buildChartArea(chartData),
-                      const SizedBox(height: 24),
-                      _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings),
-                    ],
-                  )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 2, child: _buildChartArea(chartData)),
-                      const SizedBox(width: 24),
-                      Expanded(flex: 1, child: _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings)),
-                    ],
-                  ),
+                 ? Column(
+                     children: [
+                       _buildChartArea(chartData, chartLabels),
+                       const SizedBox(height: 24),
+                       _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings),
+                     ],
+                   )
+                 : Row(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       Expanded(flex: 2, child: _buildChartArea(chartData, chartLabels)),
+                       const SizedBox(width: 24),
+                       Expanded(flex: 1, child: _buildSisaKeuangan(income, expense, cumulativeBalance, totalSavings)),
+                     ],
+                   ),
             const SizedBox(height: 24),
             _buildRincianTransaksi(snapshot),
           ],
         );
     }
+  }
+
+  Widget _buildReportHeaderActions(String title) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              if (_selectedReportType == 'Neraca') ...[
+                Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+                Text('(dalam Rupiah)', style: TextStyle(color: theme.textMuted, fontSize: 10, fontStyle: FontStyle.italic)),
+              ] else
+                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+            ],
+          ),
+        ),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: () => _showExportPeriodDialog('PDF'),
+              icon: const Icon(Icons.print, size: 16, color: Color(0xFFEF4444)),
+              label: const Text('PDF', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: () => _showExportPeriodDialog('Excel'),
+              icon: const Icon(Icons.download, size: 16, color: Color(0xFF10B981)),
+              label: const Text('Excel', style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildNeracaView(double sisa, List<QueryDocumentSnapshot> goalsList, List<QueryDocumentSnapshot> fixedExpensesList) {
@@ -1843,15 +1880,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       child: Column(
         children: [
           // Header
-          Center(
-            child: Column(
-              children: [
-                Text('LAPORAN NERACA KEUANGAN', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                Text('(dalam Rupiah)', style: TextStyle(color: theme.textMuted, fontSize: 10, fontStyle: FontStyle.italic)),
-              ],
-            ),
-          ),
+          _buildReportHeaderActions('LAPORAN NERACA KEUANGAN'),
           const SizedBox(height: 24),
           const Divider(height: 1),
           const SizedBox(height: 16),
@@ -2054,14 +2083,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header
-          Center(
-            child: Column(
-              children: [
-                Text('LAPORAN LABA RUGI', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-              ],
-            ),
-          ),
+          _buildReportHeaderActions('LAPORAN LABA RUGI'),
           const SizedBox(height: 24),
           const Divider(height: 1),
           const SizedBox(height: 16),
@@ -2167,14 +2189,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header
-          Center(
-            child: Column(
-              children: [
-                Text('BUKU BESAR KEUANGAN', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-              ],
-            ),
-          ),
+          _buildReportHeaderActions('BUKU BESAR KEUANGAN'),
           const SizedBox(height: 24),
           const Divider(height: 1),
           const SizedBox(height: 16),
@@ -2342,14 +2357,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Header
-          Center(
-            child: Column(
-              children: [
-                Text('LAPORAN ARUS KAS', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-              ],
-            ),
-          ),
+          _buildReportHeaderActions('LAPORAN ARUS KAS'),
           const SizedBox(height: 24),
           const Divider(height: 1),
           const SizedBox(height: 16),
