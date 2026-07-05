@@ -257,9 +257,9 @@ class _LaporanScreenState extends State<LaporanScreen> {
                                         child: _filterDropdown(DateFormat('MMM yyyy').format(_selectedDate)),
                                       ),
                                       const SizedBox(width: 8),
-                                      _actionButton('PDF', const Color(0xFFEF4444), () => _exportPdf()),
-                                      const SizedBox(width: 8),
-                                      _actionButton('Excel', const Color(0xFF10B981), () => _exportExcel()),
+                                       _actionButton('PDF', const Color(0xFFEF4444), () => _showExportPeriodDialog('PDF')),
+                                       const SizedBox(width: 8),
+                                       _actionButton('Excel', const Color(0xFF10B981), () => _showExportPeriodDialog('Excel')),
                                     ],
                                   ),
                                 ),
@@ -569,9 +569,145 @@ class _LaporanScreenState extends State<LaporanScreen> {
     return text.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
   }
 
-  Future<void> _exportPdf() async {
+  bool _isWithinRange(DateTime date, DateTime start, DateTime end) {
+    return !date.isBefore(start) && !date.isAfter(end);
+  }
+
+  void _showExportPeriodDialog(String format) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    bool isCustom = false;
+    DateTime customStart = DateTime(_selectedDate.year, _selectedDate.month, 1);
+    DateTime customEnd = DateTime.now();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: theme.card,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text('Pilih Periode ($format)', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<bool>(
+                    value: false,
+                    groupValue: isCustom,
+                    title: Text('Bulan Saat Ini (${DateFormat('MMMM yyyy').format(_selectedDate)})', style: TextStyle(color: theme.textPrimary)),
+                    activeColor: theme.accent,
+                    onChanged: (val) => setDialogState(() => isCustom = val!),
+                  ),
+                  RadioListTile<bool>(
+                    value: true,
+                    groupValue: isCustom,
+                    title: Text('Periode Kustom', style: TextStyle(color: theme.textPrimary)),
+                    activeColor: theme.accent,
+                    onChanged: (val) => setDialogState(() => isCustom = val!),
+                  ),
+                  if (isCustom) ...[
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () async {
+                        final DateTimeRange? picked = await showDateRangePicker(
+                          context: context,
+                          initialDateRange: DateTimeRange(start: customStart, end: customEnd),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                          builder: (context, child) {
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                colorScheme: ColorScheme(
+                                  brightness: theme.isDark ? Brightness.dark : Brightness.light,
+                                  primary: theme.accent,
+                                  onPrimary: Colors.white,
+                                  surface: theme.card,
+                                  onSurface: theme.textPrimary,
+                                  secondary: theme.accent,
+                                  onSecondary: Colors.white,
+                                  error: Colors.red,
+                                  onError: Colors.white,
+                                ),
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
+                        if (picked != null) {
+                          setDialogState(() {
+                            customStart = picked.start;
+                            customEnd = picked.end;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: theme.inputBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: theme.border),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${DateFormat('dd/MM/yyyy').format(customStart)} - ${DateFormat('dd/MM/yyyy').format(customEnd)}',
+                              style: TextStyle(color: theme.textPrimary, fontSize: 13),
+                            ),
+                            Icon(Icons.calendar_today, size: 16, color: theme.textSecondary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Batal', style: TextStyle(color: theme.textSecondary)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.accent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (isCustom) {
+                      final DateTime endOfDay = DateTime(customEnd.year, customEnd.month, customEnd.day, 23, 59, 59);
+                      if (format == 'PDF') {
+                        _exportPdf(customStartDate: customStart, customEndDate: endOfDay);
+                      } else {
+                        _exportExcel(customStartDate: customStart, customEndDate: endOfDay);
+                      }
+                    } else {
+                      if (format == 'PDF') {
+                        _exportPdf();
+                      } else {
+                        _exportExcel();
+                      }
+                    }
+                  },
+                  child: const Text('Cetak', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _exportPdf({DateTime? customStartDate, DateTime? customEndDate}) async {
     final pdf = pw.Document();
     final String uid = _dbService.uid;
+
+    final DateTime startDate = customStartDate ?? DateTime(_selectedDate.year, _selectedDate.month, 1);
+    final DateTime endDate = customEndDate ?? DateTime(_selectedDate.year, _selectedDate.month + 1, 0, 23, 59, 59);
+    final String formattedPeriod = customStartDate != null
+        ? "${DateFormat('dd/MM/yyyy').format(startDate)} - ${DateFormat('dd/MM/yyyy').format(endDate)}"
+        : DateFormat('MMMM yyyy').format(_selectedDate);
 
     // Fetch user name
     String userName = 'User';
@@ -731,7 +867,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         DateTime date = timestamp.toDate();
         double amt = (data['amount'] ?? 0).toDouble();
         bool isIncome = data['type'] == 'Pemasukan';
-        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+        if (!date.isAfter(endDate)) {
           if (isIncome) cashBalance += amt; else cashBalance -= amt;
         }
       }
@@ -769,7 +905,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   pw.Text('LAPORAN NERACA KEUANGAN', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
                   pw.SizedBox(height: 4),
                   pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
-                  pw.Text('Per ${DateFormat('dd MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
+                  pw.Text('Per ${DateFormat('dd MMMM yyyy').format(endDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                   pw.Text('(dalam Rupiah)', style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
                 ],
               ),
@@ -892,7 +1028,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         if (timestamp == null) continue;
         DateTime date = timestamp.toDate();
 
-        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        if (_isWithinRange(date, startDate, endDate)) {
           double amt = (data['amount'] ?? 0).toDouble();
           String type = data['type'] ?? '';
           String cat = _sanitizeForPdf(data['category'] ?? 'Lainnya');
@@ -918,7 +1054,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 children: [
                   pw.Text('LAPORAN LABA RUGI', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
                   pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
-                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
+                  pw.Text('Periode: $formattedPeriod', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                 ],
               ),
             ),
@@ -985,7 +1121,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         if (timestamp == null) continue;
         DateTime date = timestamp.toDate();
 
-        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        if (_isWithinRange(date, startDate, endDate)) {
           String cat = _sanitizeForPdf(data['category'] ?? 'Lainnya');
           if (!transactionsByCat.containsKey(cat)) {
             transactionsByCat[cat] = [];
@@ -1012,7 +1148,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 children: [
                   pw.Text('BUKU BESAR KEUANGAN', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
                   pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
-                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
+                  pw.Text('Periode: $formattedPeriod', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                 ],
               ),
             ),
@@ -1085,12 +1221,12 @@ class _LaporanScreenState extends State<LaporanScreen> {
         double amt = (data['amount'] ?? 0).toDouble();
         bool isIncome = data['type'] == 'Pemasukan';
 
-        // Cumulative balance up to selected month end
-        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+        // Cumulative balance up to selected end date
+        if (!date.isAfter(endDate)) {
           if (isIncome) cumulativeBalance += amt; else cumulativeBalance -= amt;
         }
 
-        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        if (_isWithinRange(date, startDate, endDate)) {
           String cat = data['category'] ?? 'Lainnya';
 
           if (cat == 'Tabungan' || cat == 'Investasi' || cat == 'Emas' || cat == 'Saham' || cat == 'Goals') {
@@ -1121,7 +1257,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   pw.Text('LAPORAN ARUS KAS', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#1E3A8A'))),
                   pw.SizedBox(height: 4),
                   pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 11.5, color: PdfColors.grey900)),
-                  pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
+                  pw.Text('Periode: $formattedPeriod', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 9.5, color: PdfColors.grey600)),
                 ],
               ),
             ),
@@ -1184,7 +1320,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
           if (timestamp == null) continue;
           DateTime date = timestamp.toDate();
           
-          if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          if (_isWithinRange(date, startDate, endDate)) {
             final isIncome = data['type'] == 'Pemasukan';
             final category = _sanitizeForPdf(data['category'] ?? '-');
             final note = _sanitizeForPdf(data['note'] ?? '');
@@ -1212,7 +1348,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
             ),
             pw.SizedBox(height: 10),
             pw.Text('Saudara/i $userName', style: pw.TextStyle(font: pw.Font.timesBoldItalic(), fontSize: 12, color: PdfColors.grey900)),
-            pw.Text('Periode: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 10, color: PdfColors.grey600)),
+            pw.Text('Periode: $formattedPeriod', style: pw.TextStyle(font: pw.Font.helveticaOblique(), fontSize: 10, color: PdfColors.grey600)),
             pw.SizedBox(height: 20),
             if (transactionsData.isEmpty)
               pw.Text('Tidak ada transaksi pada periode ini.', style: const pw.TextStyle(fontSize: 12))
@@ -1242,11 +1378,17 @@ class _LaporanScreenState extends State<LaporanScreen> {
     }
   }
 
-  Future<void> _exportExcel() async {
+  Future<void> _exportExcel({DateTime? customStartDate, DateTime? customEndDate}) async {
     var excel = Excel.createExcel();
     Sheet sheet = excel["Sheet1"];
     
     final String uid = _dbService.uid;
+
+    final DateTime startDate = customStartDate ?? DateTime(_selectedDate.year, _selectedDate.month, 1);
+    final DateTime endDate = customEndDate ?? DateTime(_selectedDate.year, _selectedDate.month + 1, 0, 23, 59, 59);
+    final String formattedPeriod = customStartDate != null
+        ? "${DateFormat('dd/MM/yyyy').format(startDate)} - ${DateFormat('dd/MM/yyyy').format(endDate)}"
+        : DateFormat('MMMM yyyy').format(_selectedDate);
 
     // Fetch user name
     String userName = 'User';
@@ -1281,7 +1423,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         DateTime date = timestamp.toDate();
         double amt = (data['amount'] ?? 0).toDouble();
         bool isIncome = data['type'] == 'Pemasukan';
-        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+        if (!date.isAfter(endDate)) {
           if (isIncome) cashBalance += amt; else cashBalance -= amt;
         }
       }
@@ -1304,7 +1446,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
       sheet.appendRow(["LAPORAN NERACA KEUANGAN"]);
       sheet.appendRow(["Saudara/i", userName]);
-      sheet.appendRow(["Per:", DateFormat('dd MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow(["Per:", DateFormat('dd MMMM yyyy').format(endDate)]);
       sheet.appendRow([]);
       sheet.appendRow(["ASET", "NILAI", "KEWAJIBAN & EKUITAS", "NILAI"]);
       
@@ -1341,7 +1483,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         if (timestamp == null) continue;
         DateTime date = timestamp.toDate();
 
-        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        if (_isWithinRange(date, startDate, endDate)) {
           double amt = (data['amount'] ?? 0).toDouble();
           String type = data['type'] ?? '';
           String cat = data['category'] ?? 'Lainnya';
@@ -1358,7 +1500,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
       sheet.appendRow(["LAPORAN LABA RUGI"]);
       sheet.appendRow(["Saudara/i", userName]);
-      sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow(["Periode:", formattedPeriod]);
       sheet.appendRow([]);
       sheet.appendRow(["PENDAPATAN", "JUMLAH"]);
       incomeByCat.forEach((cat, amt) {
@@ -1385,7 +1527,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
         if (timestamp == null) continue;
         DateTime date = timestamp.toDate();
 
-        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        if (_isWithinRange(date, startDate, endDate)) {
           String cat = data['category'] ?? 'Lainnya';
           if (!transactionsByCat.containsKey(cat)) {
             transactionsByCat[cat] = [];
@@ -1401,7 +1543,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
       sheet.appendRow(["LAPORAN BUKU BESAR KEUANGAN"]);
       sheet.appendRow(["Saudara/i", userName]);
-      sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow(["Periode:", formattedPeriod]);
       sheet.appendRow([]);
 
       transactionsByCat.forEach((cat, txList) {
@@ -1441,11 +1583,11 @@ class _LaporanScreenState extends State<LaporanScreen> {
         double amt = (data['amount'] ?? 0).toDouble();
         bool isIncome = data['type'] == 'Pemasukan';
 
-        if (date.year < _selectedDate.year || (date.year == _selectedDate.year && date.month <= _selectedDate.month)) {
+        if (!date.isAfter(endDate)) {
           if (isIncome) cumulativeBalance += amt; else cumulativeBalance -= amt;
         }
 
-        if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+        if (_isWithinRange(date, startDate, endDate)) {
           String cat = data['category'] ?? 'Lainnya';
 
           if (cat == 'Tabungan' || cat == 'Investasi' || cat == 'Emas' || cat == 'Saham' || cat == 'Goals') {
@@ -1467,7 +1609,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
 
       sheet.appendRow(["LAPORAN ARUS KAS"]);
       sheet.appendRow(["Saudara/i", userName]);
-      sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow(["Periode:", formattedPeriod]);
       sheet.appendRow([]);
       sheet.appendRow(["Aktivitas Aliran Kas", "Nominal (Rp)"]);
       sheet.appendRow(["SALDO AWAL KAS", saldoAwal]);
@@ -1496,7 +1638,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       // ----------------------------------------------------
       sheet.appendRow(["LAPORAN KEUANGAN RINGKASAN"]);
       sheet.appendRow(["Saudara/i", userName]);
-      sheet.appendRow(["Periode:", DateFormat('MMMM yyyy').format(_selectedDate)]);
+      sheet.appendRow(["Periode:", formattedPeriod]);
       sheet.appendRow([]);
       sheet.appendRow(["Tanggal", "Kategori", "Keterangan", "Tipe", "Jumlah"]);
       if (transactionsSnapshot.docs.isNotEmpty) {
@@ -1513,7 +1655,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
           final timestamp = data['timestamp'] as Timestamp?;
           if (timestamp == null) continue;
           DateTime date = timestamp.toDate();
-          if (date.month == _selectedDate.month && date.year == _selectedDate.year) {
+          if (_isWithinRange(date, startDate, endDate)) {
             final isIncome = data['type'] == 'Pemasukan';
             sheet.appendRow([
               DateFormat('dd/MM/yyyy').format(date),
