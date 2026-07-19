@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'notification_service.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -67,8 +68,12 @@ class DatabaseService {
         currentBalance = ((userSnap.data() as Map<String, dynamic>)['balance'] ?? 0).toDouble();
       }
 
+      if (type != 'Pemasukan' && (currentBalance - amount) < 0) {
+        return {'success': false, 'error': 'Saldo tidak mencukupi.'};
+      }
+
       // 2. Add transaction record
-      await userRef.collection('transactions').add({
+      DocumentReference docRef = await userRef.collection('transactions').add({
         'type': type,
         'category': category,
         'allocation': allocation,
@@ -88,6 +93,20 @@ class DatabaseService {
         'balance': newBalance,
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      // Trigger notification
+      try {
+        final notifId = NotificationService.instance.getUniqueId(docRef.id);
+        final title = type == 'Pemasukan' ? '📈 Pemasukan Baru' : '📉 Pengeluaran Baru';
+        final body = 'Rp ${amount.toStringAsFixed(0)} - $category (${note.isNotEmpty ? note : "Tanpa catatan"})';
+        await NotificationService.instance.showInstantNotification(
+          id: notifId,
+          title: title,
+          body: body,
+        );
+      } catch (notifErr) {
+        print("Error showing notification: $notifErr");
+      }
 
       return {'success': true, 'error': null};
     } catch (e) {
@@ -126,6 +145,10 @@ class DatabaseService {
       
       // Revert balance: if it was income, subtract it. If it was expense, add it back.
       double newBalance = type == 'Pemasukan' ? balance - amount : balance + amount;
+      
+      if (newBalance < 0) {
+        return {'success': false, 'error': 'Saldo tidak mencukupi.'};
+      }
       
       await userRef.update({'balance': newBalance});
 
@@ -198,6 +221,10 @@ class DatabaseService {
       // 2. Apply new amount
       double finalBalance = newType == 'Pemasukan' ? balanceAfterRevert + newAmount : balanceAfterRevert - newAmount;
       
+      if (finalBalance < 0) {
+        return {'success': false, 'error': 'Saldo tidak mencukupi.'};
+      }
+      
       await userRef.update({'balance': finalBalance});
       await userRef.collection('transactions').doc(id).update({
         'type': newType,
@@ -243,7 +270,7 @@ class DatabaseService {
     required DateTime dueDate,
     int tenorMonths = 0,
   }) async {
-    await _db.collection('users').doc(uid).collection('fixed_expenses').add({
+    DocumentReference docRef = await _db.collection('users').doc(uid).collection('fixed_expenses').add({
       'title': title,
       'amount': amount,
       'isPaid': false,
@@ -251,6 +278,20 @@ class DatabaseService {
       'dueDate': Timestamp.fromDate(dueDate),
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    // Schedule notification for due date at 08:00 AM
+    try {
+      final notifId = NotificationService.instance.getUniqueId(docRef.id);
+      final notifTime = DateTime(dueDate.year, dueDate.month, dueDate.day, 8, 0, 0);
+      await NotificationService.instance.scheduleNotification(
+        id: notifId,
+        title: '⚠️ Pengingat Jatuh Tempo',
+        body: 'Tagihan "$title" sebesar Rp ${amount.toStringAsFixed(0)} jatuh tempo hari ini.',
+        scheduledDate: notifTime,
+      );
+    } catch (e) {
+      print("Error scheduling notification in addFixedExpense: $e");
+    }
   }
 
   // Update fixed expense
@@ -267,18 +308,70 @@ class DatabaseService {
       'tenorMonths': tenorMonths,
       'dueDate': Timestamp.fromDate(dueDate),
     });
+
+    // Reschedule/update notification
+    try {
+      final notifId = NotificationService.instance.getUniqueId(id);
+      final notifTime = DateTime(dueDate.year, dueDate.month, dueDate.day, 8, 0, 0);
+      await NotificationService.instance.scheduleNotification(
+        id: notifId,
+        title: '⚠️ Pengingat Jatuh Tempo',
+        body: 'Tagihan "$title" sebesar Rp ${amount.toStringAsFixed(0)} jatuh tempo hari ini.',
+        scheduledDate: notifTime,
+      );
+    } catch (e) {
+      print("Error rescheduling notification in updateFixedExpense: $e");
+    }
   }
 
   // Delete fixed expense
   Future<void> deleteFixedExpense(String id) async {
     await _db.collection('users').doc(uid).collection('fixed_expenses').doc(id).delete();
+
+    // Cancel scheduled notification
+    try {
+      final notifId = NotificationService.instance.getUniqueId(id);
+      await NotificationService.instance.cancelNotification(notifId);
+    } catch (e) {
+      print("Error cancelling notification in deleteFixedExpense: $e");
+    }
   }
 
   // Toggle paid status (simple state toggle)
   Future<void> toggleFixedExpenseStatus(String id, bool currentStatus) async {
+    bool newStatus = !currentStatus;
     await _db.collection('users').doc(uid).collection('fixed_expenses').doc(id).update({
-      'isPaid': !currentStatus,
+      'isPaid': newStatus,
     });
+
+    // Handle scheduling/cancelling notification based on payment status
+    try {
+      final notifId = NotificationService.instance.getUniqueId(id);
+      if (newStatus) {
+        // Cancel notification
+        await NotificationService.instance.cancelNotification(notifId);
+      } else {
+        // Reschedule notification by querying the doc details
+        DocumentSnapshot doc = await _db.collection('users').doc(uid).collection('fixed_expenses').doc(id).get();
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data() as Map<String, dynamic>;
+          final String title = data['title'] ?? '';
+          final double amount = (data['amount'] ?? 0).toDouble();
+          if (data['dueDate'] != null) {
+            final DateTime dueDate = (data['dueDate'] as Timestamp).toDate();
+            final notifTime = DateTime(dueDate.year, dueDate.month, dueDate.day, 8, 0, 0);
+            await NotificationService.instance.scheduleNotification(
+              id: notifId,
+              title: '⚠️ Pengingat Jatuh Tempo',
+              body: 'Tagihan "$title" sebesar Rp ${amount.toStringAsFixed(0)} jatuh tempo hari ini.',
+              scheduledDate: notifTime,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print("Error updating notification in toggleFixedExpenseStatus: $e");
+    }
   }
 
   // Pay fixed expense (with financial impact)
@@ -324,6 +417,22 @@ class DatabaseService {
         'balance': currentBalance - amount,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
+
+      // Trigger notification & cancel scheduled due date notification
+      try {
+        final notifId = NotificationService.instance.getUniqueId(id);
+        // Cancel scheduled notification since it is paid
+        await NotificationService.instance.cancelNotification(notifId);
+
+        // Show instant notification of payment
+        await NotificationService.instance.showInstantNotification(
+          id: notifId + 1, // different ID to avoid conflict
+          title: '✅ Pembayaran Sukses',
+          body: 'Tagihan "$title" sebesar Rp ${amount.toStringAsFixed(0)} telah berhasil dibayar.',
+        );
+      } catch (notifErr) {
+        print("Error with notification in payFixedExpense: $notifErr");
+      }
 
       return {'success': true};
     } catch (e) {
@@ -378,7 +487,22 @@ class DatabaseService {
             currentBalance = ((userSnap.data() as Map<String, dynamic>)['balance'] ?? 0).toDouble();
           }
 
-          // Deduct balance (allow negative balance or clamp at 0 - standard auto-debit allows deduction anyway)
+          if (currentBalance < amount) {
+            // Skip payment and show notification of failure
+            try {
+              final notifId = NotificationService.instance.getUniqueId(doc.id);
+              await NotificationService.instance.showInstantNotification(
+                id: notifId + 3, // different ID to avoid conflict
+                title: '❌ Auto-Debet Gagal',
+                body: 'Tagihan "$title" sebesar Rp ${amount.toStringAsFixed(0)} gagal dibayar otomatis karena saldo tidak mencukupi.',
+              );
+            } catch (e) {
+              print("Error showing auto-payment failure notification: $e");
+            }
+            continue;
+          }
+
+          // Deduct balance
           double newBalance = currentBalance - amount;
           await userRef.set({
             'balance': newBalance,
@@ -399,6 +523,18 @@ class DatabaseService {
             'timestamp': FieldValue.serverTimestamp(),
           });
 
+          // Trigger instant notification for auto-payment
+          try {
+            final notifId = NotificationService.instance.getUniqueId(doc.id);
+            await NotificationService.instance.showInstantNotification(
+              id: notifId + 2, // avoid conflict with scheduled ID
+              title: '🤖 Auto-Debet Sukses',
+              body: 'Tagihan "$title" sebesar Rp ${amount.toStringAsFixed(0)} berhasil dibayar secara otomatis.',
+            );
+          } catch (e) {
+            print("Error showing auto-payment notification: $e");
+          }
+
           // 2. Handle Tenor / Recurring
           if (tenor > 1) {
             // Move due date to next month
@@ -417,12 +553,34 @@ class DatabaseService {
               'tenorMonths': tenor - 1,
               'dueDate': Timestamp.fromDate(nextDueDate),
             });
+
+            // Reschedule notification for next month
+            try {
+              final notifId = NotificationService.instance.getUniqueId(doc.id);
+              final notifTime = DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day, 8, 0, 0);
+              await NotificationService.instance.scheduleNotification(
+                id: notifId,
+                title: '⚠️ Pengingat Jatuh Tempo',
+                body: 'Tagihan "$title" sebesar Rp ${amount.toStringAsFixed(0)} jatuh tempo hari ini.',
+                scheduledDate: notifTime,
+              );
+            } catch (e) {
+              print("Error rescheduling recurring notification: $e");
+            }
           } else {
             // tenor is 1 or 0, so mark as paid
             await doc.reference.update({
               'isPaid': true,
               'tenorMonths': 0,
             });
+
+            // Cancel notification
+            try {
+              final notifId = NotificationService.instance.getUniqueId(doc.id);
+              await NotificationService.instance.cancelNotification(notifId);
+            } catch (e) {
+              print("Error cancelling notification after final payment: $e");
+            }
           }
         }
       }
@@ -487,7 +645,7 @@ class DatabaseService {
       });
 
       // 2. Add as a transaction record (Type: Pengeluaran for balance, but tagged as Tabungan)
-      await userRef.collection('transactions').add({
+      DocumentReference docRef = await userRef.collection('transactions').add({
         'type': 'Pengeluaran',
         'category': 'Tabungan',
         'allocation': 'Primer',
@@ -502,6 +660,18 @@ class DatabaseService {
         'balance': currentBalance - amount,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
+
+      // Trigger notification
+      try {
+        final notifId = NotificationService.instance.getUniqueId(docRef.id);
+        await NotificationService.instance.showInstantNotification(
+          id: notifId,
+          title: '💰 Berhasil Menabung',
+          body: 'Berhasil menabung Rp ${amount.toStringAsFixed(0)} untuk "$goalTitle"',
+        );
+      } catch (notifErr) {
+        print("Error showing notification: $notifErr");
+      }
 
       return {'success': true, 'error': null};
     } catch (e) {

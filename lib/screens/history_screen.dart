@@ -96,7 +96,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
               onPressed: () async {
                 double newAmount = double.tryParse(amountController.text) ?? 0;
-                await _dbService.updateTransaction(
+                final res = await _dbService.updateTransaction(
                   id: id,
                   oldAmount: (data['amount'] ?? 0).toDouble(),
                   oldType: data['type'],
@@ -106,7 +106,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   allocation: selectedAllocation,
                   note: noteController.text,
                 );
-                if (mounted) Navigator.pop(context);
+                if (res['success'] == true) {
+                  if (mounted) Navigator.pop(context);
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Gagal mengubah transaksi: ${res['error']}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
               child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
@@ -381,7 +392,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ),
                         );
                         if (confirm == true) {
-                          await _dbService.deleteTransaction(doc.id, data);
+                          final res = await _dbService.deleteTransaction(doc.id, data);
+                          if (res['success'] != true && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('❌ Gagal menghapus transaksi: ${res['error']}'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
                         }
                       }
                     },

@@ -8,6 +8,7 @@ import 'screens/home_screen.dart';
 import 'services/auth_service.dart';
 import 'providers/theme_provider.dart';
 import 'package:app_links/app_links.dart';
+import 'services/notification_service.dart';
 
 import 'dart:io';
 
@@ -24,6 +25,12 @@ class MyHttpOverrides extends HttpOverrides {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = MyHttpOverrides();
+  
+  try {
+    await NotificationService.instance.init();
+  } catch (e) {
+    print("Notification initialization error: $e");
+  }
   
   try {
     await Firebase.initializeApp(
