@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import 'notification_service.dart';
 
 class DatabaseService {
@@ -64,12 +65,19 @@ class DatabaseService {
       // 1. Get current balance first
       DocumentSnapshot userSnap = await userRef.get();
       double currentBalance = 0;
+      double minBalanceReserve = 0;
       if (userSnap.exists && userSnap.data() != null) {
-        currentBalance = ((userSnap.data() as Map<String, dynamic>)['balance'] ?? 0).toDouble();
+        final userData = userSnap.data() as Map<String, dynamic>;
+        currentBalance = (userData['balance'] ?? 0).toDouble();
+        minBalanceReserve = (userData['minBalanceReserve'] ?? userData['monthlyBudget'] ?? 0).toDouble();
       }
 
-      if (type != 'Pemasukan' && (currentBalance - amount) < 0) {
-        return {'success': false, 'error': 'Saldo tidak mencukupi.'};
+      if (type != 'Pemasukan' && (currentBalance - amount) < minBalanceReserve) {
+        final NumberFormat fmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+        return {
+          'success': false,
+          'error': 'Transaksi dibatalkan. Saldo Anda harus tersisa minimal ${fmt.format(minBalanceReserve)}.'
+        };
       }
 
       // 2. Add transaction record
@@ -221,8 +229,18 @@ class DatabaseService {
       // 2. Apply new amount
       double finalBalance = newType == 'Pemasukan' ? balanceAfterRevert + newAmount : balanceAfterRevert - newAmount;
       
-      if (finalBalance < 0) {
-        return {'success': false, 'error': 'Saldo tidak mencukupi.'};
+      double minBalanceReserve = 0;
+      if (userSnap.exists && userSnap.data() != null) {
+        final userData = userSnap.data() as Map<String, dynamic>;
+        minBalanceReserve = (userData['minBalanceReserve'] ?? userData['monthlyBudget'] ?? 0).toDouble();
+      }
+      
+      if (finalBalance < minBalanceReserve) {
+        final NumberFormat fmt = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+        return {
+          'success': false,
+          'error': 'Transaksi dibatalkan. Saldo Anda harus tersisa minimal ${fmt.format(minBalanceReserve)}.'
+        };
       }
       
       await userRef.update({'balance': finalBalance});
@@ -712,7 +730,11 @@ class DatabaseService {
 
   // Stream of user profile (for balance etc)
   Stream<DocumentSnapshot> getUserData() {
-    return _db.collection('users').doc(uid).snapshots();
+    String currentUid = uid;
+    if (currentUid.isEmpty) {
+      currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    }
+    return _db.collection('users').doc(currentUid).snapshots();
   }
 
   // Update specific user preference

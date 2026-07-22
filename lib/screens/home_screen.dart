@@ -48,9 +48,12 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _expenseCategories = ['Makan', 'Transport', 'Belanja', 'Hiburan', 'Lainnya'];
   List<String> _incomeCategories = ['Gaji', 'Bonus', 'Investasi', 'Hibah', 'Lainnya'];
 
+  late PageController _pageController;
+
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _activeScreenIndex);
     _userDataStream = _dbService.getUserData();
     _allTransactionsStream = _dbService.getAllTransactions();
     _fixedExpensesStream = _dbService.getFixedExpenses();
@@ -61,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     _amountController.dispose();
     _noteController.dispose();
     super.dispose();
@@ -191,13 +195,18 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _buildNavbar(),
             Expanded(
-              child: IndexedStack(
-                index: _activeScreenIndex,
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() {
+                    _activeScreenIndex = index;
+                  });
+                },
                 children: [
-                  SingleChildScrollView(child: _buildDashboardContent()),
-                  SingleChildScrollView(child: GoalsScreen()),
-                  SingleChildScrollView(child: LaporanScreen(initialDate: _selectedDate)),
-                  SingleChildScrollView(child: ProfileScreen(onNavigateToDashboard: () => _goToPage(0))),
+                  _KeepAliveWrapper(child: SingleChildScrollView(child: _buildDashboardContent())),
+                  _KeepAliveWrapper(child: SingleChildScrollView(child: GoalsScreen())),
+                  _KeepAliveWrapper(child: SingleChildScrollView(child: LaporanScreen(initialDate: _selectedDate))),
+                  _KeepAliveWrapper(child: ProfileScreen(onNavigateToDashboard: () => _goToPage(0))),
                 ],
               ),
             ),
@@ -212,11 +221,18 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _activeScreenIndex = index;
     });
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   Widget _buildDashboardContent() {
     return StreamBuilder<DocumentSnapshot>(
-      stream: _userDataStream,
+      stream: _dbService.getUserData(),
       builder: (context, userSnapshot) {
         if (userSnapshot.hasError) {
           return Center(child: Text('Error: ${userSnapshot.error}', style: const TextStyle(color: Colors.red)));
@@ -226,9 +242,11 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         double balance = 0;
+        double minBalanceReserve = 0;
         if (userSnapshot.hasData && userSnapshot.data!.exists) {
           final data = userSnapshot.data!.data() as Map<String, dynamic>?;
           balance = (data?['balance'] ?? 0).toDouble();
+          minBalanceReserve = (data?['minBalanceReserve'] ?? data?['monthlyBudget'] ?? 0).toDouble();
         }
 
         bool isMobile = MediaQuery.of(context).size.width < 600;
@@ -246,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 24),
               _buildAnalyticsArea(),
               const SizedBox(height: 24),
-              _buildHabitBanner(),
+              _buildMonthlyBudgetCard(minBalanceReserve, balance),
             ],
           ),
         );
@@ -1123,21 +1141,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
         for (int i = 0; i < labels.length; i++) {
           String key = labels[i];
+          double incVal = incomeMap[key] ?? 0;
+          double expVal = expenseMap[key] ?? 0;
           barGroups.add(
             BarChartGroupData(
               x: i,
               barRods: [
                 BarChartRodData(
-                  toY: incomeMap[key] ?? 0,
+                  toY: incVal,
                   color: const Color(0xFF3B82F6),
                   width: 8,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  label: BarChartRodLabel(
+                    show: incVal > 0,
+                    text: _formatShortAmount(incVal),
+                    style: TextStyle(color: theme.textPrimary, fontSize: 8, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 BarChartRodData(
-                  toY: expenseMap[key] ?? 0,
+                  toY: expVal,
                   color: const Color(0xFFEF4444),
                   width: 8,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  label: BarChartRodLabel(
+                    show: expVal > 0,
+                    text: _formatShortAmount(expVal),
+                    style: TextStyle(color: theme.textPrimary, fontSize: 8, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -1153,13 +1183,16 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 10,
                 children: [
-                   Text(
+                  Text(
                     _chartFilter == 'Mingguan' ? 'Trend 7 Hari Terakhir' : 'Trend Bulanan ${DateFormat('MMM yyyy').format(_selectedDate)}', 
-                    style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)
+                    style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  const Spacer(),
                   _buildToggleFilter(),
                 ],
               ),
@@ -1253,7 +1286,24 @@ class _HomeScreenState extends State<HomeScreen> {
     double maxVal = 0;
     inc.forEach((k, v) => maxVal = v > maxVal ? v : maxVal);
     exp.forEach((k, v) => maxVal = v > maxVal ? v : maxVal);
-    return maxVal == 0 ? 100000 : maxVal * 1.2;
+    return maxVal == 0 ? 100000 : maxVal * 1.25;
+  }
+
+  String _formatShortAmount(double value) {
+    if (value == 0) return '0';
+    if (value >= 1000000000) {
+      double res = value / 1000000000;
+      return '${res.toStringAsFixed(res % 1 == 0 ? 0 : 1)}M';
+    }
+    if (value >= 1000000) {
+      double res = value / 1000000;
+      return '${res.toStringAsFixed(res % 1 == 0 ? 0 : 1)}jt';
+    }
+    if (value >= 1000) {
+      double res = value / 1000;
+      return '${res.toStringAsFixed(res % 1 == 0 ? 0 : 1)}rb';
+    }
+    return value.toStringAsFixed(0);
   }
 
   Widget _chartLegend(String label, Color color) {
@@ -1345,129 +1395,207 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHabitBanner() {
+  Widget _buildMonthlyBudgetCard(double minBalanceReserve, double currentBalance) {
     final theme = Provider.of<ThemeProvider>(context);
-    return StreamBuilder<QuerySnapshot>(
-      stream: _allTransactionsStream,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink();
-        }
 
-        Map<String, double> categorySums = {};
-        String largestExpenseNote = '';
-        double largestExpenseAmount = 0;
+    double availableToSpend = currentBalance - minBalanceReserve;
+    double progress = currentBalance > 0 
+        ? ((currentBalance - minBalanceReserve) / currentBalance).clamp(0.0, 1.0) 
+        : 0.0;
 
-        for (var doc in snapshot.data!.docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          final ts = data['timestamp'] as Timestamp?;
-          if (ts == null) continue;
-          DateTime d = ts.toDate();
+    Color statusColor = const Color(0xFF10B981);
+    if (availableToSpend <= 0) {
+      statusColor = Colors.redAccent;
+    } else if (availableToSpend < minBalanceReserve * 0.5) {
+      statusColor = Colors.orangeAccent;
+    }
 
-          if (d.month == _selectedDate.month && d.year == _selectedDate.year && data['type'] == 'Pengeluaran') {
-            double amt = (data['amount'] ?? 0).toDouble();
-            String cat = data['category'] ?? 'Lainnya';
-            categorySums[cat] = (categorySums[cat] ?? 0) + amt;
-
-            if (amt > largestExpenseAmount) {
-              largestExpenseAmount = amt;
-              largestExpenseNote = data['note'] ?? cat;
-            }
-          }
-        }
-
-        if (categorySums.isEmpty) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: theme.card, borderRadius: BorderRadius.circular(16)),
-            child: Center(child: Text('Belum ada pengeluaran dicatat bulan ini.', style: TextStyle(color: theme.textMuted))),
-          );
-        }
-
-        List<PieChartSectionData> sections = [];
-        int i = 0;
-        final List<Color> colors = [const Color(0xFF818CF8), const Color(0xFFF472B6), const Color(0xFF34D399), const Color(0xFFFBBF24), const Color(0xFF60A5FA)];
-        
-        categorySums.forEach((cat, sum) {
-          sections.add(
-            PieChartSectionData(
-              value: sum,
-              title: '', // Hide title in sections
-              color: colors[i % colors.length],
-              radius: 40,
-              showTitle: false,
-            )
-          );
-          i++;
-        });
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: theme.card,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.psychology, color: Color(0xFFF472B6)),
-                  const SizedBox(width: 8),
-                  Text('Analisis Kebiasaan Keuangan', style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                ],
+              const Icon(Icons.shield_outlined, color: Color(0xFF6366F1), size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'Keuangan Bulan Ini / Budget',
+                style: TextStyle(color: theme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                   SizedBox(
-                    height: 100,
-                    width: 100,
-                    child: PieChart(
-                      PieChartData(
-                        sections: sections,
-                        centerSpaceRadius: 30,
-                        sectionsSpace: 2,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Pengeluaran Terbesar:', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-                        const SizedBox(height: 4),
-                        Text(largestExpenseNote, style: TextStyle(color: theme.textPrimary, fontSize: 15, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                        Text(currencyFormatter.format(largestExpenseAmount), style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 12),
-                        Text('Distribusi Kategori:', style: TextStyle(color: theme.textSecondary, fontSize: 11)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: categorySums.keys.take(3).toList().asMap().entries.map((e) {
-                            return Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(width: 8, height: 8, decoration: BoxDecoration(color: colors[e.key % colors.length], shape: BoxShape.circle)),
-                                const SizedBox(width: 4),
-                                Text(e.value, style: TextStyle(color: theme.textMuted, fontSize: 10)),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.edit_outlined, color: theme.accent, size: 20),
+                tooltip: 'Atur Minimal Budget',
+                onPressed: () => _showSetBudgetDialog(minBalanceReserve),
               ),
             ],
           ),
-        );
-      }
+          const SizedBox(height: 16),
+          if (minBalanceReserve <= 0)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  children: [
+                    Text('Belum ada batas minimal saldo yang diatur.', style: TextStyle(color: theme.textMuted, fontSize: 13)),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _showSetBudgetDialog(minBalanceReserve),
+                      icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                      label: const Text('Atur Minimal Budget', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Minimal Budget (Batas Saldo)', style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                    const SizedBox(height: 4),
+                    Text(currencyFormatter.format(minBalanceReserve), style: const TextStyle(color: Color(0xFF6366F1), fontSize: 15, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Sisa Boleh Dipakai', style: TextStyle(color: theme.textSecondary, fontSize: 11)),
+                    const SizedBox(height: 4),
+                    Text(
+                      currencyFormatter.format(availableToSpend > 0 ? availableToSpend : 0),
+                      style: TextStyle(color: statusColor, fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: theme.isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                color: statusColor,
+                minHeight: 8,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  availableToSpend > 0 ? 'Saldo dalam batas aman' : 'Batas minimal saldo tercapai!',
+                  style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Saldo Harus Tersisa: ${currencyFormatter.format(minBalanceReserve)}',
+                  style: TextStyle(color: theme.textSecondary, fontSize: 11),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
+  }
+
+  void _showSetBudgetDialog(double currentReserve) {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final TextEditingController reserveController = TextEditingController(
+      text: currentReserve > 0 ? currentReserve.toStringAsFixed(0) : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: theme.card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Atur Minimal Budget (Batas Saldo)', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tentukan nominal saldo minimal yang harus selalu tersisa. Transaksi akan otomatis ditolak jika menyebabkan saldo berkurang di bawah batas ini:', style: TextStyle(color: theme.textSecondary, fontSize: 12)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reserveController,
+                keyboardType: TextInputType.number,
+                style: TextStyle(color: theme.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Batas Saldo Minimal (Rp)',
+                  labelStyle: TextStyle(color: theme.textSecondary),
+                  hintText: 'Contoh: 100000',
+                  hintStyle: TextStyle(color: theme.textMuted),
+                  fillColor: theme.inputBg,
+                  filled: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  prefixText: 'Rp ',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Batal', style: TextStyle(color: theme.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                double newReserve = double.tryParse(reserveController.text.trim()) ?? 0;
+                Navigator.pop(context);
+                await _dbService.updateUserPreference('minBalanceReserve', newReserve);
+                await _dbService.updateUserPreference('monthlyBudget', newReserve);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Batas saldo minimal berhasil diatur: ${currencyFormatter.format(newReserve)}')),
+                  );
+                }
+              },
+              child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _KeepAliveWrapper extends StatefulWidget {
+  final Widget child;
+  const _KeepAliveWrapper({required this.child});
+
+  @override
+  State<_KeepAliveWrapper> createState() => _KeepAliveWrapperState();
+}
+
+class _KeepAliveWrapperState extends State<_KeepAliveWrapper> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

@@ -255,9 +255,9 @@ class _AturListScreenState extends State<AturListScreen> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
                       children: [
-                        Expanded(flex: 3, child: Text('DESKRIPSI', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
-                        Expanded(flex: 2, child: Text('NOMINAL', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
-                        Expanded(flex: 2, child: Text('AKSI', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 4, child: Text('DESKRIPSI', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 3, child: Text('NOMINAL', style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 3, child: Text('AKSI', textAlign: TextAlign.right, style: TextStyle(color: theme.textMuted, fontSize: 11, fontWeight: FontWeight.bold))),
                       ],
                     ),
                   ),
@@ -302,14 +302,14 @@ class _AturListScreenState extends State<AturListScreen> {
                                 children: [
                                   // Deskripsi
                                   Expanded(
-                                    flex: 3,
+                                    flex: 4,
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(title, style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                                         const SizedBox(height: 4),
                                         Wrap(
-                                          spacing: 8,
+                                          spacing: 6,
                                           runSpacing: 4,
                                           crossAxisAlignment: WrapCrossAlignment.center,
                                           children: [
@@ -344,19 +344,22 @@ class _AturListScreenState extends State<AturListScreen> {
                                   ),
                                   // Nominal
                                   Expanded(
-                                    flex: 2,
+                                    flex: 3,
                                     child: Text(currencyFormatter.format(amount), 
                                       style: TextStyle(color: theme.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
                                   ),
                                   // Aksi
                                   Expanded(
-                                    flex: 2,
-                                    child: Row(
+                                    flex: 3,
+                                    child: Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      alignment: WrapAlignment.end,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
                                       children: [
                                         GestureDetector(
                                           onTap: () async {
                                             if (!isPaid) {
-                                              // Jika belum bayar, lakukan proses bayar yang memotong saldo
                                               final res = await _dbService.payFixedExpense(
                                                 id: id,
                                                 title: title,
@@ -368,27 +371,24 @@ class _AturListScreenState extends State<AturListScreen> {
                                                 );
                                               }
                                             } else {
-                                              // Jika sudah lunas, hanya ubah status balik ke pending (tanpa refund otomatis)
                                               await _dbService.toggleFixedExpenseStatus(id, isPaid);
                                             }
                                           },
                                           child: Text(isPaid ? 'PENDING' : 'LUNAS', 
                                             style: TextStyle(color: isPaid ? Colors.orange : Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                         ),
-                                        const SizedBox(width: 8),
-                                         GestureDetector(
-                                           onTap: () {
-                                             setState(() {
-                                               _editingId = id;
-                                               _titleController.text = title;
-                                               _amountController.text = amount.toString();
-                                               _selectedTenorMonths = tenor;
-                                               _selectedDueDate = dueDate;
-                                             });
-                                           },
+                                        GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _editingId = id;
+                                              _titleController.text = title;
+                                              _amountController.text = amount.toString();
+                                              _selectedTenorMonths = tenor;
+                                              _selectedDueDate = dueDate;
+                                            });
+                                          },
                                           child: const Text('Edit', style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                         ),
-                                        const SizedBox(width: 8),
                                         GestureDetector(
                                           onTap: () => _dbService.deleteFixedExpense(id),
                                           child: const Text('Hapus', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),

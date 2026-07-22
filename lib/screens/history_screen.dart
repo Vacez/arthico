@@ -25,129 +25,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _selectedDate = widget.initialDate ?? DateTime.now();
   }
 
-  void _showEditTransactionDialog(String id, Map<String, dynamic> data) {
-    final theme = Provider.of<ThemeProvider>(context, listen: false);
-    final amountController = TextEditingController(text: data['amount'].toString());
-    final noteController = TextEditingController(text: data['note'] ?? '');
-
-    String selectedType = data['type'] ?? 'Pengeluaran';
-    String selectedCategory = data['category'] ?? 'Lainnya';
-    String selectedAllocation = data['allocation'] ?? 'Sekunder';
-
-    final List<String> expenseCategories = ['Makan', 'Transport', 'Belanja', 'Hiburan', 'Lainnya'];
-    final List<String> incomeCategories = ['Gaji', 'Bonus', 'Investasi', 'Hibah', 'Lainnya'];
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: theme.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Edit Transaksi', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDropdown('Jenis', selectedType, ['Pemasukan', 'Pengeluaran'], (val) {
-                  setDialogState(() {
-                    selectedType = val!;
-                    selectedCategory = selectedType == 'Pengeluaran' ? expenseCategories[0] : incomeCategories[0];
-                  });
-                }),
-                _buildDropdown('Kategori', selectedCategory, selectedType == 'Pengeluaran' ? expenseCategories : incomeCategories, (val) {
-                  setDialogState(() => selectedCategory = val!);
-                }),
-                _buildDropdown('Alokasi', selectedAllocation, ['Sekunder', 'Primer'], (val) {
-                  setDialogState(() => selectedAllocation = val!);
-                }),
-                TextField(
-                  controller: amountController,
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(color: theme.textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Nominal', 
-                    labelStyle: TextStyle(color: theme.textSecondary),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
-                  ),
-                ),
-                TextField(
-                  controller: noteController,
-                  style: TextStyle(color: theme.textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Keterangan', 
-                    labelStyle: TextStyle(color: theme.textSecondary),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.border)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.accent, width: 2)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Batal', style: TextStyle(color: theme.textSecondary)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.accent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () async {
-                double newAmount = double.tryParse(amountController.text) ?? 0;
-                final res = await _dbService.updateTransaction(
-                  id: id,
-                  oldAmount: (data['amount'] ?? 0).toDouble(),
-                  oldType: data['type'],
-                  newAmount: newAmount,
-                  newType: selectedType,
-                  category: selectedCategory,
-                  allocation: selectedAllocation,
-                  note: noteController.text,
-                );
-                if (res['success'] == true) {
-                  if (mounted) Navigator.pop(context);
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ Gagal mengubah transaksi: ${res['error']}'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdown(String label, String value, List<String> items, Function(String?) onChanged) {
-    final theme = Provider.of<ThemeProvider>(context, listen: false);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(color: theme.textSecondary, fontSize: 12)),
-        Theme(
-          data: Theme.of(context).copyWith(canvasColor: theme.card),
-          child: DropdownButton<String>(
-            value: value,
-            isExpanded: true,
-            underline: Container(height: 1, color: theme.border),
-            style: TextStyle(color: theme.textPrimary),
-            items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-            onChanged: onChanged,
-          ),
-        ),
-        const SizedBox(height: 12),
-      ],
-    );
-  }
   Widget _buildFilterChips() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -359,48 +236,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     ],
                   ),
-                  trailing: PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert, color: theme.textSecondary, size: 20),
-                    color: theme.card,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    itemBuilder: (context) => [
-                      PopupMenuItem(value: 'edit', child: Row(
-                        children: [Icon(Icons.edit, size: 16, color: theme.textPrimary), const SizedBox(width: 8), Text('Edit', style: TextStyle(color: theme.textPrimary))],
-                      )),
-                      const PopupMenuItem(value: 'hapus', child: Row(
-                        children: [Icon(Icons.delete, size: 16, color: Colors.redAccent), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: Colors.redAccent))],
-                      )),
-                    ],
-                    onSelected: (val) async {
-                      if (val == 'edit') {
-                        _showEditTransactionDialog(doc.id, data);
-                      } else if (val == 'hapus') {
-                        bool? confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            backgroundColor: theme.card,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            title: Text('Hapus Transaksi?', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
-                            content: Text('Saldo Anda akan dikembalikan secara otomatis.', style: TextStyle(color: theme.textSecondary)),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Batal', style: TextStyle(color: theme.textSecondary))),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true), 
-                                child: const Text('Hapus', style: TextStyle(color: Colors.redAccent)),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true) {
-                          final res = await _dbService.deleteTransaction(doc.id, data);
-                          if (res['success'] != true && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('❌ Gagal menghapus transaksi: ${res['error']}'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                    tooltip: 'Hapus Transaksi',
+                    onPressed: () async {
+                      bool? confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: theme.card,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          title: Text('Hapus Transaksi?', style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold)),
+                          content: Text('Saldo Anda akan dikembalikan secara otomatis.', style: TextStyle(color: theme.textSecondary)),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Batal', style: TextStyle(color: theme.textSecondary))),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true), 
+                              child: const Text('Hapus', style: TextStyle(color: Colors.redAccent)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        final res = await _dbService.deleteTransaction(doc.id, data);
+                        if (res['success'] != true && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('❌ Gagal menghapus transaksi: ${res['error']}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                         }
                       }
                     },
